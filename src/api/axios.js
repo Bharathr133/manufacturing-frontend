@@ -1,9 +1,9 @@
 import axios from "axios";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8080";
+const API_URL = import.meta.env.VITE_API_URL || "https://api-gatewayy.up.railway.app";
 
 const api = axios.create({
-    baseURL: "http://localhost:8080" || "https://api-gatewayy.up.railway.app",
+    baseURL:"https://api-gatewayy.up.railway.app",
     timeout: 10000,
 });
 
