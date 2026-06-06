@@ -4,7 +4,7 @@ const API_URL = import.meta.env.VITE_API_URL || "https://api-gatewayy.up.railway
 
 const api = axios.create({
     baseURL:"https://api-gatewayy.up.railway.app",
-    timeout: 10000,
+    timeout: 90000,
 });
 
 export default api;
