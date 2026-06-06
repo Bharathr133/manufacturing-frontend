@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import MainLayout from "../layouts/MainLayout";
+import { useAuth, ROLES } from "../context/AuthContext";
 import { getMachineCount, getRunningCount } from "../api/machineApi";
 import { getOrderCount } from "../api/productionApi";
 import { getQualityStats, getAllQualityChecks } from "../api/qualityApi";
@@ -13,6 +14,7 @@ const CACHE_DURATION = 30000; // 30 seconds
 
 export default function Dashboard() {
     const navigate = useNavigate();
+    const { user } = useAuth();
     const [stats, setStats] = useState({
         machineCount: 0,
         runningCount: 0,
@@ -29,6 +31,11 @@ export default function Dashboard() {
     const [reportPeriod, setReportPeriod] = useState("week");
 
     useEffect(() => {
+        // Simple Role-Based Access Control for the page
+        if (!user) {
+            navigate("/login");
+            return;
+        }
         loadStats();
     }, []);
 
@@ -114,7 +121,8 @@ export default function Dashboard() {
             icon: Cpu,
             gradient: "from-blue-500 to-blue-700",
             subtitle: "Registered equipment",
-            link: "/machines"
+            link: "/machines",
+            roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.OPERATOR]
         },
         {
             title: "Running Machines",
@@ -122,7 +130,8 @@ export default function Dashboard() {
             icon: Activity,
             gradient: "from-green-500 to-green-700",
             subtitle: `${((stats.runningCount / stats.machineCount) * 100 || 0).toFixed(0)}% of total`,
-            link: "/machines"
+            link: "/machines",
+            roles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.OPERATOR]
         },
         {
             title: "Production Orders",
@@ -130,7 +139,8 @@ export default function Dashboard() {
             icon: Package,
             gradient: "from-purple-500 to-purple-700",
             subtitle: "Total orders created",
-            link: "/production"
+            link: "/production",
+            roles: [ROLES.ADMIN, ROLES.MANAGER]
         },
         {
             title: "Quality Checks",
@@ -138,9 +148,10 @@ export default function Dashboard() {
             icon: TrendingUp,
             gradient: "from-indigo-500 to-indigo-700",
             subtitle: `${stats.passedChecks} passed, ${stats.failedChecks} failed`,
-            link: "/quality"
+            link: "/quality",
+            roles: [ROLES.ADMIN, ROLES.MANAGER]
         },
-    ];
+    ].filter(card => card.roles.includes(user?.role));
 
     const qualityCards = [
         {
@@ -148,26 +159,30 @@ export default function Dashboard() {
             value: `${stats.defectRate.toFixed(1)}%`,
             gradient: stats.defectRate < 5 ? "from-green-500 to-green-700" : stats.defectRate < 15 ? "from-yellow-500 to-yellow-700" : "from-red-500 to-red-700",
             subtitle: stats.defectRate < 5 ? "Excellent quality" : stats.defectRate < 15 ? "Needs improvement" : "Critical attention needed",
+            roles: [ROLES.ADMIN, ROLES.MANAGER]
         },
         {
             title: "Passed",
             value: stats.passedChecks,
             gradient: "from-green-500 to-green-700",
             subtitle: `${((stats.passedChecks / stats.totalChecks) * 100 || 0).toFixed(0)}% of checks`,
+            roles: [ROLES.ADMIN, ROLES.MANAGER]
         },
         {
             title: "Rework Needed",
             value: stats.reworkChecks,
             gradient: "from-yellow-500 to-yellow-700",
             subtitle: `${((stats.reworkChecks / stats.totalChecks) * 100 || 0).toFixed(0)}% of checks`,
+            roles: [ROLES.ADMIN, ROLES.MANAGER]
         },
         {
             title: "Failed",
             value: stats.failedChecks,
             gradient: "from-red-500 to-red-700",
             subtitle: `${((stats.failedChecks / stats.totalChecks) * 100 || 0).toFixed(0)}% of checks`,
+            roles: [ROLES.ADMIN, ROLES.MANAGER]
         },
-    ];
+    ].filter(card => card.roles.includes(user?.role));
 
     // Skeleton loader component
     const SkeletonCard = () => (
