@@ -2,9 +2,8 @@ import api from "./axios";
 
 export const getMachines = () => api.get("/machines");
 export const getMachine = (id) => api.get(`/machines/${id}`);
-export const createMachine = (machine) => api.post("/machines", machine);
+export const createMachine = (machine) => api.post("/machines", { ...machine, status: "IDLE" });
 export const updateMachine = (id, machine) => api.put(`/machines/${id}`, machine);
-export const deleteMachine = (id) => api.delete(`/machines/${id}`);
 
 // Get both counts in ONE call
 export const getMachineStats = async () => {
