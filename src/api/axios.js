@@ -20,7 +20,9 @@ api.interceptors.request.use((config) => {
     };
 
     if (config.data && hasNegative(config.data)) {
-        return Promise.reject({ message: "Invalid Input: System does not accept negative values." });
+        const error = new Error("Data Integrity Violation: The system cannot process negative operational values.");
+        error.code = 'VALIDATION_ERROR';
+        return Promise.reject(error);
     }
     return config;
 });
@@ -30,11 +32,11 @@ api.interceptors.response.use(
     (error) => {
         const userFriendlyError = { ...error };
         if (!error.response) {
-            userFriendlyError.message = "Synchronizing system modules... Please wait while the secure link is established.";
+            userFriendlyError.message = "Establishing System Uplink: The remote module is initializing. This may take up to 60 seconds.";
         } else if (error.response.status >= 500) {
-            userFriendlyError.message = "Operational modules are currently undergoing background optimization.";
+            userFriendlyError.message = "System Optimization: High-level background maintenance in progress. Synchronizing...";
         } else if (error.code === 'ECONNABORTED') {
-            userFriendlyError.message = "Initializing secure data uplink. Retrying for a stable connection...";
+            userFriendlyError.message = "Module Warm-up: The production environment is preparing for operation. Please maintain the session.";
         }
         return Promise.reject(userFriendlyError);
     }

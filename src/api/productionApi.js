@@ -1,8 +1,13 @@
 import api from "./axios";
 
 // Professional Part List
-export const PREFILLED_PARTS = [
-    "PISTON-X1", "GEAR-V8", "SHAFT-M4", "VALVE-TR7", "BEARING-Z2", "CUSTOM"
+export const PRODUCTION_PART_TEMPLATES = [
+    { id: "PISTON-X1", name: "Hydraulic Piston X1" },
+    { id: "GEAR-V8", name: "Transmission Gear V8" },
+    { id: "SHAFT-M4", name: "Drive Shaft M4" },
+    { id: "VALVE-TR7", name: "Intake Valve TR7" },
+    { id: "BEARING-Z2", name: "Ceramic Bearing Z2" },
+    { id: "CUSTOM", name: "-- Manual Entry --" }
 ];
 
 export const getOrders = () => api.get("/production");
