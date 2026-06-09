@@ -102,7 +102,7 @@ export default function Machines() {
     );
 
     const getStatusBadge = (status) => {
-        const s = (status === "RUNNING" || status === "STOPPED" || status === "MAINTENANCE") ? status : "IDLE";
+        const s = (status && ["RUNNING", "STOPPED", "MAINTENANCE"].includes(status)) ? status : "IDLE";
         const statusMap = {
             RUNNING: "bg-green-100 text-green-800",
             STOPPED: "bg-red-100 text-red-800",
@@ -185,7 +185,7 @@ export default function Machines() {
                                         <td className="px-6 py-4 text-sm text-gray-600">{machine.machineType}</td>
                                         <td className="px-6 py-4">
                                             <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusBadge(machine.status)}`}>
-                                                {(machine.status === "RUNNING" || machine.status === "STOPPED" || machine.status === "MAINTENANCE") ? machine.status : "IDLE"}
+                                                {(machine.status && ["RUNNING", "STOPPED", "MAINTENANCE"].includes(machine.status)) ? machine.status : "IDLE"}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 text-right space-x-2">

@@ -24,7 +24,7 @@ export default function Login() {
         if (login(username, password)) {
             navigate("/dashboard");
         } else {
-            setError("Invalid credentials. Use admin / password123");
+            setError("Invalid credentials. Please check your username and password.");
         }
     };
 

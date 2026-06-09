@@ -141,17 +141,19 @@ export default function Quality() {
 
     const handleMachineChange = (mId) => {
         if (!mId) {
-            setFormData({ ...formData, machineId: "", productionOrderId: "", partNumber: "", quantityProduced: "" });
+            setFormData({ ...formData, machineId: "", productionOrderId: "", partNumber: "", quantityProduced: "", quantityPassed: "" });
             return;
         }
         const machineId = parseInt(mId);
-        // Find the most relevant order (Prefer ACTIVE batches, then latest COMPLETED)
+        // Find the most relevant order (Prefer ACTIVE/RUNNING/IN_PROGRESS batches, then latest COMPLETED)
         const relevantOrder = [...orders]
             .filter(o => o.machineId === machineId)
             .sort((a, b) => {
-                if (a.status === "ACTIVE" && b.status !== "ACTIVE") return -1;
-                if (b.status === "ACTIVE" && a.status !== "ACTIVE") return 1;
-                return (b.id || 0) - (a.id || 0);
+                const aIsActive = ["ACTIVE", "RUNNING", "IN_PROGRESS"].includes(a.status);
+                const bIsActive = ["ACTIVE", "RUNNING", "IN_PROGRESS"].includes(b.status);
+                if (aIsActive && !bIsActive) return -1;
+                if (bIsActive && !aIsActive) return 1;
+                return (b.id || 0) - (a.id || 0); // Latest first
             })[0];
 
         if (relevantOrder) {
@@ -164,20 +166,41 @@ export default function Quality() {
                 quantityPassed: relevantOrder.quantity.toString() // Default pass all
             });
         } else {
-            setFormData({ ...formData, machineId: mId, productionOrderId: "", partNumber: "", quantityProduced: "" });
+            setFormData({ ...formData, machineId: mId, productionOrderId: "", partNumber: "", quantityProduced: "", quantityPassed: "" });
         }
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setSubmitting(true);
+
+        // Client-side validation for quantities
+        const produced = parseInt(formData.quantityProduced);
+        const passed = parseInt(formData.quantityPassed);
+
+        if (isNaN(produced) || produced < 1) {
+            alert("Validation Error: Quantity Produced must be at least 1.");
+            setSubmitting(false);
+            return;
+        }
+        if (isNaN(passed) || passed < 0) {
+            alert("Validation Error: Quantity Passed cannot be negative.");
+            setSubmitting(false);
+            return;
+        }
+        if (passed > produced) {
+            alert("Validation Error: Quantity Passed cannot exceed Quantity Produced.");
+            setSubmitting(false);
+            return;
+        }
+
         try {
             await recordQualityCheck({
                 productionOrderId: parseInt(formData.productionOrderId),
                 machineId: parseInt(formData.machineId),
                 partNumber: formData.partNumber,
-                quantityProduced: parseInt(formData.quantityProduced),
-                quantityPassed: parseInt(formData.quantityPassed),
+                quantityProduced: produced,
+                quantityPassed: passed,
                 defectType: formData.defectType || "NONE",
                 severity: formData.severity,
                 inspector: formData.inspector,
@@ -446,7 +469,7 @@ export default function Quality() {
                                         <td className="px-6 py-4 text-sm">{check.productionOrderId}</td>
                                         <td className="px-6 py-4 text-sm">{check.machineId}</td>
                                         <td className="px-6 py-4 font-medium">{check.partNumber}</td>
-                                        <td className="px-6 py-4 text-sm">{check.quantityProduced}</td>
+                                        <td className="px-6 py-4 text-sm">{check.quantityProduced || 0}</td>
                                         <td className="px-6 py-4 text-sm text-green-600">{check.quantityPassed}</td>
                                         <td className="px-6 py-4 text-sm text-red-600">{check.quantityFailed}</td>
                                         <td className="px-6 py-4">
@@ -540,7 +563,7 @@ export default function Quality() {
                                     <label className="block text-sm font-medium mb-1">Quantity Produced *</label>
                                     <input
                                         type="number"
-                                        min="0"
+                                        min="1"
                                         required
                                         value={formData.quantityProduced}
                                         onChange={(e) => setFormData({ ...formData, quantityProduced: Math.max(0, e.target.value) })}

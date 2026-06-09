@@ -22,7 +22,7 @@ export default function Production() {
         // return () => clearInterval(interval);
     }, []);
 
-    const activeOrders = useMemo(() => orders.filter((order) => ["ACTIVE", "RUNNING", "IN_PROGRESS"].includes(order.status)), [orders]);
+    const activeOrders = useMemo(() => orders.filter((order) => order.status === "ACTIVE"), [orders]);
     const completedOrders = useMemo(() => orders.filter((order) => order.status === "COMPLETED"), [orders]);
     const activeMachineIds = useMemo(() => new Set(activeOrders.map((order) => order.machineId)), [activeOrders]);
 
@@ -34,7 +34,7 @@ export default function Production() {
                 activeOrders.forEach(order => {
                     const current = next[order.id] || { value: 0, paused: false };
                     if (!current.paused && current.value < 100) {
-                        next[order.id] = { ...current, value: Math.min(100, current.value + 2.0) };
+                        next[order.id] = { ...current, value: Math.min(100, current.value + 0.5) };
                         hasUpdate = true;
                     }
                 });
@@ -171,13 +171,11 @@ export default function Production() {
     const getStatusBadge = (status) => {
         const statusMap = {
             ACTIVE: "bg-green-100 text-green-800",
-            RUNNING: "bg-green-100 text-green-800",
-            IN_PROGRESS: "bg-green-100 text-green-800",
             COMPLETED: "bg-blue-100 text-blue-800",
             PENDING: "bg-yellow-100 text-yellow-800",
             CANCELLED: "bg-red-100 text-red-800",
         };
-        return statusMap[status] || "bg-green-100 text-green-800";
+        return statusMap[status] || "bg-gray-100 text-gray-800";
     };
 
     return (
