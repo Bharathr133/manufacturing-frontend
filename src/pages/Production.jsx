@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import MainLayout from "../layouts/MainLayout";
 import { startProduction, getOrders, completeProduction, PRODUCTION_PART_TEMPLATES } from "../api/productionApi";
 import { getMachines } from "../api/machineApi";
-import { Play, RefreshCw, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
+import { Play, RefreshCw, CheckCircle, XCircle, AlertTriangle, Activity, Pause, Settings, Package } from "lucide-react";
 
 export default function Production() {
     const [machineId, setMachineId] = useState("");
@@ -12,6 +12,7 @@ export default function Production() {
     const [machines, setMachines] = useState([]);
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [simProgress, setSimProgress] = useState({});
     const [circuitBreakerStatus, setCircuitBreakerStatus] = useState(null);
 
     useEffect(() => {
@@ -21,9 +22,28 @@ export default function Production() {
         // return () => clearInterval(interval);
     }, []);
 
-    const activeOrders = orders.filter((order) => order.status === "ACTIVE");
-    const completedOrders = orders.filter((order) => order.status === "COMPLETED");
-    const activeMachineIds = new Set(activeOrders.map((order) => order.machineId));
+    const activeOrders = useMemo(() => orders.filter((order) => order.status === "ACTIVE"), [orders]);
+    const completedOrders = useMemo(() => orders.filter((order) => order.status === "COMPLETED"), [orders]);
+    const activeMachineIds = useMemo(() => new Set(activeOrders.map((order) => order.machineId)), [activeOrders]);
+
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setSimProgress(prev => {
+                const next = { ...prev };
+                let hasUpdate = false;
+                activeOrders.forEach(order => {
+                    const current = next[order.id] || { value: 0, paused: false };
+                    if (!current.paused && current.value < 100) {
+                        next[order.id] = { ...current, value: Math.min(100, current.value + 0.5) };
+                        hasUpdate = true;
+                    }
+                });
+                return hasUpdate ? next : prev;
+            });
+        }, 1000);
+        return () => clearInterval(timer);
+    }, [activeOrders]);
+
     const availableMachines = machines.filter(
         (machine) => ["IDLE", "RUNNING"].includes(machine.status) && !activeMachineIds.has(machine.id)
     );
@@ -104,6 +124,10 @@ export default function Production() {
 
             alert(`Success: ${getResponseMessage(res.data, "Production started successfully")}`);
             await Promise.all([loadOrders(), loadMachines()]);
+            setSimProgress(prev => ({
+                ...prev,
+                [res.data.id]: { value: 0, paused: false }
+            }));
             setPartNumber("");
             setCustomPart("");
             setQuantity("");
@@ -120,11 +144,23 @@ export default function Production() {
         try {
             const res = await completeProduction(orderId);
             alert(`Order Completed: ${getResponseMessage(res.data, "Production completed successfully")}`);
+            setSimProgress(prev => {
+                const next = { ...prev };
+                delete next[orderId];
+                return next;
+            });
             await Promise.all([loadOrders(), loadMachines()]);
         } catch (error) {
             const errorMsg = error.response?.data?.message || "Failed to complete production";
             alert(`Completion Failed: ${errorMsg}`);
         }
+    };
+
+    const togglePause = (orderId) => {
+        setSimProgress(prev => {
+            const current = prev[orderId] || { value: 0, paused: false };
+            return { ...prev, [orderId]: { ...current, paused: !current.paused } };
+        });
     };
 
     const getMachineName = (id) => {
