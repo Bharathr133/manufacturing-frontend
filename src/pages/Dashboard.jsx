@@ -473,56 +473,58 @@ export default function Dashboard() {
         return fallback;
     };
 
-    const loadStats = async () => {
+    const loadStats = () => {
         setLoading(true);
         setServices({ machines: SERVICE_STATUS.LOADING, production: SERVICE_STATUS.LOADING, quality: SERVICE_STATUS.LOADING });
 
-        const updates = {};
-        const svcUpdates = {};
+        // Fire all requests in parallel
+        const machineFetch = (async () => {
+            try {
+                const [machinesRes, runningRes] = await Promise.all([getMachineCount(), getRunningCount()]);
+                setStats(prev => ({ ...prev, machineCount: unwrap(machinesRes), runningCount: unwrap(runningRes) }));
+                setServices(prev => ({ ...prev, machines: SERVICE_STATUS.ONLINE }));
+            } catch (err) {
+                console.warn("[Dashboard] Machine service error:", err?.message || err);
+                setServices(prev => ({ ...prev, machines: SERVICE_STATUS.OFFLINE }));
+            }
+        })();
 
-        // Machine Service — independent, never blocks other services
-        try {
-            const [machinesRes, runningRes] = await Promise.all([getMachineCount(), getRunningCount()]);
-            updates.machineCount = unwrap(machinesRes);
-            updates.runningCount = unwrap(runningRes);
-            svcUpdates.machines = SERVICE_STATUS.ONLINE;
-        } catch (err) {
-            console.warn("[Dashboard] Machine service error:", err?.message || err);
-            svcUpdates.machines = SERVICE_STATUS.OFFLINE;
-        }
+        const productionFetch = (async () => {
+            try {
+                const ordersRes = await getOrderCount();
+                setStats(prev => ({ ...prev, orderCount: unwrap(ordersRes) }));
+                setServices(prev => ({ ...prev, production: SERVICE_STATUS.ONLINE }));
+            } catch (err) {
+                console.warn("[Dashboard] Production service error:", err?.message || err);
+                setServices(prev => ({ ...prev, production: SERVICE_STATUS.OFFLINE }));
+            }
+        })();
 
-        // Production Service — independent
-        try {
-            const ordersRes = await getOrderCount();
-            updates.orderCount = unwrap(ordersRes);
-            svcUpdates.production = SERVICE_STATUS.ONLINE;
-        } catch (err) {
-            console.warn("[Dashboard] Production service error:", err?.message || err);
-            svcUpdates.production = SERVICE_STATUS.OFFLINE;
-        }
+        const qualityFetch = (async () => {
+            try {
+                const [qualityStats, qualityChecks] = await Promise.all([getQualityStats(), getAllQualityChecks()]);
+                const qs = qualityStats?.data ?? qualityStats ?? {};
+                const checks = qualityChecks?.data ?? qualityChecks ?? [];
+                setStats(prev => ({
+                    ...prev,
+                    totalChecks: qs.totalChecks ?? qs.total ?? 0,
+                    passedChecks: qs.passed ?? qs.passedChecks ?? 0,
+                    reworkChecks: qs.rework ?? qs.reworkChecks ?? 0,
+                    failedChecks: qs.failed ?? qs.failedChecks ?? 0,
+                    defectRate: qs.defectRate ?? qs.defect_rate ?? 0,
+                    recentChecks: Array.isArray(checks) ? checks.slice(-3) : []
+                }));
+                setServices(prev => ({ ...prev, quality: SERVICE_STATUS.ONLINE }));
+            } catch (err) {
+                console.warn("[Dashboard] Quality service error:", err?.message || err);
+                setServices(prev => ({ ...prev, quality: SERVICE_STATUS.OFFLINE }));
+            }
+        })();
 
-        // Quality Service — independent
-        try {
-            const [qualityStats, qualityChecks] = await Promise.all([getQualityStats(), getAllQualityChecks()]);
-            // getQualityStats returns the object directly (not wrapped in .data)
-            const qs = qualityStats?.data ?? qualityStats ?? {};
-            updates.totalChecks = qs.totalChecks ?? qs.total ?? 0;
-            updates.passedChecks = qs.passed ?? qs.passedChecks ?? 0;
-            updates.reworkChecks = qs.rework ?? qs.reworkChecks ?? 0;
-            updates.failedChecks = qs.failed ?? qs.failedChecks ?? 0;
-            updates.defectRate = qs.defectRate ?? qs.defect_rate ?? 0;
-            const checks = qualityChecks?.data ?? qualityChecks ?? [];
-            updates.recentChecks = Array.isArray(checks) ? checks.slice(-3) : [];
-            svcUpdates.quality = SERVICE_STATUS.ONLINE;
-        } catch (err) {
-            console.warn("[Dashboard] Quality service error:", err?.message || err);
-            svcUpdates.quality = SERVICE_STATUS.OFFLINE;
-        }
-
-        setStats(prev => ({ ...prev, ...updates }));
-        setServices(svcUpdates);
-        setLastUpdated(new Date());
-        setLoading(false);
+        Promise.allSettled([machineFetch, productionFetch, qualityFetch]).then(() => {
+            setLastUpdated(new Date());
+            setLoading(false);
+        });
     };
 
     const downloadReport = () => {

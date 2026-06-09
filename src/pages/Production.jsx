@@ -407,6 +407,10 @@ export default function Production() {
                 await updateMachine(machineId, { ...machine, status: newStatus });
                 // Internal state update for simulation UI
                 await Promise.all([loadOrders(), loadMachines()]);
+                setSimProgress(prev => ({
+                    ...prev,
+                    [orderId]: { ...prev[orderId], status: newStatus }
+                }));
             }
         } catch (error) {
             alert("Failed to update unit status");

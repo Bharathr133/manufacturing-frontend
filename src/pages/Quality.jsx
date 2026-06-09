@@ -44,7 +44,7 @@ export default function Quality() {
         machineId: "",
         partNumber: "",
         quantityProduced: "",
-        quantityPassed: 0,
+        quantityPassed: "", // Will be auto-calculated
         quantityFailed: 0,
         quantityRework: 0,
         defectType: "",
@@ -71,8 +71,8 @@ export default function Quality() {
     // Auto-calculate Passed Quantity based on Rejected and Rework
     useEffect(() => {
         const produced = parseInt(formData.quantityProduced) || 0;
-        const rejected = parseInt(formData.quantityFailed) || 0;
-        const rework = parseInt(formData.quantityRework) || 0;
+        const rejected = Math.max(0, parseInt(formData.quantityFailed) || 0);
+        const rework = Math.max(0, parseInt(formData.quantityRework) || 0);
         
         setFormData(prev => ({
             ...prev,
@@ -207,6 +207,12 @@ export default function Quality() {
             return;
         }
 
+        if (passed + failed + rework !== produced) {
+            alert(`Validation Error: Passed (${passed}) + Rejected (${failed}) + Rework (${rework}) must equal Produced (${produced}).`);
+            setSubmitting(false);
+            return;
+        }
+
         try {
             await recordQualityCheck({
                 productionOrderId: parseInt(formData.productionOrderId),
@@ -214,6 +220,8 @@ export default function Quality() {
                 partNumber: formData.partNumber,
                 quantityProduced: produced,
                 quantityPassed: passed,
+                quantityFailed: failed, // Ensure failed is sent
+                quantityRework: rework, // Ensure rework is sent
                 defectType: formData.defectType || "NONE",
                 severity: formData.severity,
                 inspector: formData.inspector,
@@ -238,7 +246,9 @@ export default function Quality() {
             machineId: "",
             partNumber: "",
             quantityProduced: "",
-            quantityPassed: "",
+            quantityPassed: 0,
+            quantityFailed: 0,
+            quantityRework: 0,
             defectType: "",
             severity: "MINOR",
             inspector: "",
