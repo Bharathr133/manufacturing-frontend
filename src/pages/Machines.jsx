@@ -101,13 +101,14 @@ export default function Machines() {
     );
 
     const getStatusBadge = (status) => {
+        const s = (!status || status === "UNKNOWN") ? "IDLE" : status;
         const statusMap = {
             RUNNING: "bg-green-100 text-green-800",
             STOPPED: "bg-red-100 text-red-800",
             IDLE: "bg-yellow-100 text-yellow-800",
             MAINTENANCE: "bg-gray-100 text-gray-800",
         };
-        return statusMap[status] || "bg-blue-100 text-blue-800"; // IDLE by default for new
+        return statusMap[s] || "bg-blue-100 text-blue-800";
     };
 
     // Machine types for dropdown
@@ -183,7 +184,7 @@ export default function Machines() {
                                         <td className="px-6 py-4 text-sm text-gray-600">{machine.machineType}</td>
                                         <td className="px-6 py-4">
                                             <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusBadge(machine.status)}`}>
-                                                {machine.status || "IDLE"}
+                                                {(!machine.status || machine.status === "UNKNOWN") ? "IDLE" : machine.status}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 text-right space-x-2">

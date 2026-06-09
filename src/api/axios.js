@@ -32,11 +32,11 @@ api.interceptors.response.use(
     (error) => {
         const userFriendlyError = { ...error };
         if (!error.response) {
-            userFriendlyError.message = "Establishing Secure Uplink: The production module is initializing. Please maintain connection.";
+            userFriendlyError.message = "Establishing System Uplink: The remote module is initializing. This may take up to 60 seconds.";
         } else if (error.response.status >= 500) {
-            userFriendlyError.message = "Module Synchronization: Background system optimization is currently in progress.";
-        } else if (error.code === 'ECONNABORTED') {
-            userFriendlyError.message = "Operational Warm-up: The environment is preparing for production. Please wait.";
+            userFriendlyError.message = "System Optimization: High-level background maintenance in progress. Synchronizing...";
+        } else if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+            userFriendlyError.message = "Module Warm-up: The production environment is preparing for operation. Please maintain the session.";
         }
         return Promise.reject(userFriendlyError);
     }

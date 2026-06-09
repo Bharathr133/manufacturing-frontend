@@ -296,6 +296,90 @@ export default function Production() {
                 </button>
             </div>
 
+            {/* Live Production Monitoring - Simulation Section */}
+            {activeOrders.length > 0 && (
+                <div className="mb-8">
+                    <h2 className="text-xl font-semibold mb-4 flex items-center gap-2 text-slate-700">
+                        <Activity className="text-blue-600 animate-pulse" size={24} />
+                        Live Production Monitoring
+                    </h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {activeOrders.map((order) => {
+                            const progress = simProgress[order.id]?.value || 0;
+                            const isPaused = simProgress[order.id]?.paused || false;
+                            
+                            return (
+                                <div key={order.id} className={`bg-white rounded-xl shadow-lg border-l-4 ${isPaused ? 'border-amber-400' : 'border-blue-500'} p-5 relative overflow-hidden transition-all hover:shadow-xl`}>
+                                    {/* Background Gear Animation */}
+                                    <div className="absolute top-0 right-0 p-2 opacity-5 pointer-events-none">
+                                        <Settings 
+                                            size={80} 
+                                            className={`${!isPaused && progress < 100 ? "animate-spin" : ""}`} 
+                                            style={{ animationDuration: '10s', animationPlayState: isPaused ? 'paused' : 'running' }} 
+                                        />
+                                    </div>
+
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div>
+                                            <h3 className="font-bold text-gray-800">{getMachineName(order.machineId)}</h3>
+                                            <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold">{order.partNumber}</p>
+                                        </div>
+                                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-tight ${isPaused ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
+                                            {isPaused ? 'System Paused' : 'Processing'}
+                                        </span>
+                                    </div>
+
+                                    {/* Visual Simulation Block */}
+                                    <div className="flex items-center justify-center py-6 bg-slate-50 rounded-xl mb-4 border border-dashed border-slate-200">
+                                        <div className="relative flex items-center gap-4">
+                                            <div className={`p-4 rounded-2xl ${isPaused ? 'bg-slate-200' : 'bg-blue-100'} transition-colors duration-500`}>
+                                                <Settings 
+                                                    className={`${!isPaused && progress < 100 ? 'animate-spin' : ''} ${isPaused ? 'text-slate-400' : 'text-blue-500'}`} 
+                                                    size={40} 
+                                                    style={{ animationDuration: '3s', animationPlayState: isPaused ? 'paused' : 'running' }} 
+                                                />
+                                            </div>
+                                            <div className="flex flex-col gap-1.5">
+                                                {[1, 2, 3].map(j => (
+                                                    <div 
+                                                        key={j} 
+                                                        className={`h-1.5 w-1.5 rounded-full ${!isPaused && progress < 100 ? 'bg-blue-400 animate-pulse' : 'bg-slate-300'}`}
+                                                        style={{ animationDelay: `${j * 0.1}s` }}
+                                                    />
+                                                ))}
+                                            </div>
+                                            <div className={`p-4 rounded-2xl ${progress >= 100 ? 'bg-green-500' : isPaused ? 'bg-slate-400' : 'bg-blue-600'} text-white shadow-lg transition-all duration-500`}>
+                                                <Package size={24} className={!isPaused && progress < 100 ? 'animate-bounce' : ''} />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2 mb-4">
+                                        <div className="flex justify-between text-xs font-bold">
+                                            <span className="text-gray-500 uppercase">Batch Integrity</span>
+                                            <span className={isPaused ? 'text-amber-600' : 'text-blue-700'}>{Math.floor(progress)}%</span>
+                                        </div>
+                                        <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
+                                            <div className={`h-full transition-all duration-500 ease-out ${progress >= 100 ? 'bg-green-500' : isPaused ? 'bg-amber-400' : 'bg-blue-600'}`} style={{ width: `${progress}%` }}></div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex gap-2 relative z-10">
+                                        <button onClick={() => togglePause(order.id)} className={`flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-all ${isPaused ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>
+                                            {isPaused ? <Play size={12} fill="currentColor" /> : <Pause size={12} fill="currentColor" />}
+                                            {isPaused ? 'RESUME' : 'PAUSE'}
+                                        </button>
+                                        <button onClick={() => handleCompleteProduction(order.id)} className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-xs font-bold hover:bg-blue-700 transition-shadow shadow-md">
+                                            COMPLETE
+                                        </button>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
             {/* Orders Table */}
             <div className="bg-white rounded-xl shadow overflow-hidden">
                 <div className="p-5 border-b">
