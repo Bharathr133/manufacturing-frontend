@@ -1,16 +1,18 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import MainLayout from "../layouts/MainLayout";
-import { startProduction, getOrders, completeProduction, PRODUCTION_PART_TEMPLATES } from "../api/productionApi";
+import { startProduction, getOrders, completeProduction, PRODUCTION_PART_TEMPLATES, } from "../api/productionApi";
 import { getMachines, updateMachine } from "../api/machineApi";
-import { Play, RefreshCw, CheckCircle, XCircle, AlertTriangle, Activity, Pause, Settings, Package, Gauge, Cog, Square, Clock, Zap } from "lucide-react";
+import { Play, RefreshCw, CheckCircle, XCircle, AlertTriangle, Activity, Pause, Settings, Package, Gauge, Cog, Square, Clock, Zap, ChevronLeft, ChevronRight, ExternalLink, } from "lucide-react";
 
 export default function Production() {
+    const navigate = useNavigate();
     // Cycle Times (Seconds per Part)
     const MACHINE_CYCLE_TIMES = {
-        TURNING: 30,
-        MILLING: 45,
+        TURNING: 15,
+        MILLING: 25,
         PRESS: 20,
-        MOLDING: 60
+        MOLDING: 45
     };
 
     const MACHINE_STATS = {
@@ -30,16 +32,37 @@ export default function Production() {
     const [machines, setMachines] = useState([]);
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [filterMachineId, setFilterMachineId] = useState("ALL"); // State for machine filter
     const [simProgress, setSimProgress] = useState(() => {
         const saved = localStorage.getItem("manufacturing_sim_v3");
         return saved ? JSON.parse(saved) : {};
     });
     const [circuitBreakerStatus, setCircuitBreakerStatus] = useState(null);
 
+    // Pagination and Sorting Logic
+    const [currentPage, setCurrentPage] = useState(1);
+    const ordersPerPage = 4;
+
+    const sortedOrders = useMemo(() => {
+        let list = [...orders];
+        if (filterMachineId !== "ALL") { // Apply machine filter
+            list = list.filter(o => o.machineId === parseInt(filterMachineId));
+        }
+        return list.sort((a, b) => {
+            // Primary sort by Machine ID to keep orders grouped/separated by machines
+            if (a.machineId !== b.machineId) return a.machineId - b.machineId;
+            // Secondary sort by Order ID descending to show newest activity per machine first
+            return b.id - a.id;
+        });
+    }, [orders, filterMachineId]);
+
+    const totalPages = Math.ceil(sortedOrders.length / ordersPerPage);
+    const paginatedOrders = sortedOrders.slice((currentPage - 1) * ordersPerPage, currentPage * ordersPerPage);
+
     useEffect(() => {
         loadMachines();
         loadOrders();
-        
+
         const interval = setInterval(() => {
             loadMachines();
             loadOrders();
@@ -47,15 +70,34 @@ export default function Production() {
         return () => clearInterval(interval);
     }, []);
 
-    const activeOrders = useMemo(() => orders.filter((order) => 
-        ["RUNNING", "PAUSED", "STOPPED", "ACTIVE", "START"].includes(order.status.toUpperCase())
-    ), [orders]);
-    
-    const completedOrders = useMemo(() => orders.filter((order) => 
-        ["COMPLETED"].includes(order.status.toUpperCase())
+    // Stable list for the background simulation (depends only on backend data)
+    const ordersToSimulate = useMemo(() => orders.filter((order) =>
+        order.status.toUpperCase() !== "COMPLETED"
     ), [orders]);
 
-    const activeMachineIds = useMemo(() => new Set(activeOrders.map((order) => order.machineId)), [activeOrders]);
+    // Dynamic list for UI display (respects local completion status)
+    const activeOrders = useMemo(() => ordersToSimulate.filter((order) =>
+        simProgress[order.id]?.status !== "COMPLETED" &&
+        (filterMachineId === "ALL" || order.machineId === parseInt(filterMachineId))
+    ), [ordersToSimulate, simProgress, filterMachineId]);
+
+    const completedOrders = useMemo(() => orders.filter((order) =>
+        ["COMPLETED"].includes(order.status.toUpperCase())
+    ), [orders]); // This should ideally also check simProgress for local completion
+
+    const activeMachineIds = useMemo(
+        () =>
+            new Set(
+                activeOrders
+                    .filter(order => {
+                        const stats = simProgress[order.id];
+                        const produced = stats?.units || 0;
+                        return produced < order.quantity;
+                    })
+                    .map(order => order.machineId)
+            ),
+        [activeOrders, simProgress]
+    );
 
     // Catch-up logic for navigation/background progression
     useEffect(() => {
@@ -72,15 +114,17 @@ export default function Production() {
                         const machine = machines.find(m => m.id === parseInt(order.machineId));
                         const stats = next[order.id];
                         const currentStatus = (stats?.status || machine?.status || order.status || "").toUpperCase();
-                        
+
                         if (stats && (currentStatus === 'RUNNING' || currentStatus === 'ACTIVE')) {
-                            const cTime = stats.cycleTime || MACHINE_CYCLE_TIMES[machine?.machineType] || 30;
+                            // Prioritize stats.cycleTime, then order.cycleTime, then machine default
+                            const cTime = Number(stats.cycleTime || order.cycleTime || MACHINE_CYCLE_TIMES[machine?.machineType] || 30) || 30;
                             const addedRuntime = secondsPassed;
                             const newRuntime = (stats.runtime || 0) + addedRuntime;
                             const newUnits = Math.floor(newRuntime / cTime);
-                            
+
                             next[order.id] = {
                                 ...stats,
+                                cycleTime: cTime, // Ensure cycleTime is preserved
                                 runtime: newRuntime,
                                 units: Math.min(order.quantity, newUnits),
                                 value: (Math.min(order.quantity, newUnits) / order.quantity) * 100,
@@ -106,25 +150,32 @@ export default function Production() {
                     const stats = next[order.id];
                     const currentStatus = (stats?.status || machine?.status || order.status || "").toUpperCase();
 
-                    // Simulation ONLY ticks if status is RUNNING or ACTIVE (NOT paused)
                     if (currentStatus !== 'RUNNING' && currentStatus !== 'ACTIVE') return;
 
-                    const cycleTime = MACHINE_CYCLE_TIMES[machine?.machineType] || 30;
-                    
-                    const current = next[order.id] || { units: 0, seconds: 0, runtime: 0 };
+                    // Prioritize stats.cycleTime, then order.cycleTime, then machine default
+                    const cycleTime = Number(stats?.cycleTime || order.cycleTime || MACHINE_CYCLE_TIMES[machine?.machineType] || 30) || 30;
+
+                    // Initialize or use existing stats - CRITICAL: Preserve all properties (operator, batch, etc.)
+                    const current = next[order.id] || { 
+                        units: 0, 
+                        runtime: 0, 
+                        cycleTime: cycleTime, // Ensure cycleTime is set on initialization
+                        operator: order.operator || operator || 'SYSTEM', // Preserve operator
+                        batchNumber: order.batchNumber || 'BT-PENDING' // Preserve batchNumber
+                    };
                     if (current.units < order.quantity) {
                         const newRuntime = (current.runtime || 0) + 1;
                         const newUnits = Math.floor(newRuntime / cycleTime);
-                        
-                        next[order.id] = { 
-                            ...current, 
+
+                        next[order.id] = {
+                            ...current,
                             runtime: newRuntime,
                             units: Math.min(order.quantity, newUnits),
                             value: (Math.min(order.quantity, newUnits) / order.quantity) * 100,
                             cycleProgress: ((newRuntime % cycleTime) / cycleTime) * 100
                         };
                         hasUpdate = true;
-                        
+
                         if (newUnits >= parseInt(order.quantity)) {
                             handleAutoSyncCompletion(order.id);
                         }
@@ -144,7 +195,7 @@ export default function Production() {
         if (!machineId) return [];
         const selectedMachine = machines.find(m => m.id === parseInt(machineId));
         if (!selectedMachine) return [];
-        
+
         return PRODUCTION_PART_TEMPLATES.filter(t => t.type === selectedMachine.machineType || t.type === "ALL");
     }, [machineId, machines]);
 
@@ -197,9 +248,9 @@ export default function Production() {
     };
 
     const getFormattedNow = () => {
-        return new Date().toLocaleString('en-US', { 
-            day: '2-digit', month: 'short', year: 'numeric', 
-            hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true 
+        return new Date().toLocaleString('en-US', {
+            day: '2-digit', month: 'short', year: 'numeric',
+            hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
         });
     };
 
@@ -241,6 +292,7 @@ export default function Production() {
             return;
         }
         const finalCycleTime = cycleTime === "CUSTOM" ? parseInt(customCycleTime) : parseInt(cycleTime);
+        console.log("Selected Cycle Time:", finalCycleTime);
         if (isNaN(finalCycleTime) || finalCycleTime < 1 || finalCycleTime > 300) {
             alert("Validation Error: Cycle time must be between 1 and 300 seconds");
             return;
@@ -256,11 +308,12 @@ export default function Production() {
 
         try {
             // 1. Start the Production Order
-            const prodRes = await startProduction(machineId, {
+            const prodRes = await startProduction(machineId, { // Added 'const prodRes ='
                 partNumber: finalPartNumber,
                 quantity: Number(quantity),
                 operator: operator.trim(),
-                batchNumber: batchNumber
+                batchNumber: batchNumber,
+                cycleTime: finalCycleTime
             });
 
             // 2. Explicitly update Machine Status to RUNNING
@@ -271,17 +324,19 @@ export default function Production() {
 
             alert(`Success: ${getResponseMessage(prodRes.data, "Production started successfully")}`);
             await Promise.all([loadOrders(), loadMachines()]);
-            setSimProgress(prev => ({ 
-                ...prev, 
-                [prodRes.data.id]: { 
-                    value: 0, 
-                    units: 0, 
-                    runtime: 0, 
-                    batchNumber, 
+            setSimProgress(prev => ({
+                ...prev,
+                [prodRes.data.id]: {
+                    runtime: 0,
+                    units: 0,
+                    value: 0,
+                    cycleProgress: 0,
+                    batchNumber,
                     operator: operator.trim(),
                     startTime: getFormattedNow(),
-                    cycleTime: finalCycleTime
-                } 
+                    cycleTime: finalCycleTime,
+                    status: "RUNNING"
+                }
             }));
             setPartNumber("");
             setCustomPart("");
@@ -300,7 +355,7 @@ export default function Production() {
         try {
             const order = orders.find(o => o.id === orderId);
             const res = await completeProduction(orderId);
-            
+
             // Reset Machine to IDLE
             if (order) {
                 const machine = machines.find(m => m.id === order.machineId);
@@ -340,9 +395,9 @@ export default function Production() {
             case "TURNING":
                 return (
                     <div className="relative flex items-center justify-center h-24">
-                        <Settings 
-                            className={`text-blue-500 ${isRunning ? 'animate-spin' : ''} ${status === 'STOPPED' ? 'opacity-30' : ''}`} 
-                            size={64} 
+                        <Settings
+                            className={`text-blue-500 ${isRunning ? 'animate-spin' : ''} ${status === 'STOPPED' ? 'opacity-30' : ''}`}
+                            size={64}
                             style={{ animationDuration: '1s' }}
                         />
                         <div className="absolute w-32 h-2 bg-slate-700 rounded-full opacity-20"></div>
@@ -394,9 +449,9 @@ export default function Production() {
     };
 
     const handleAction = async (machineId, orderId, action) => {
-        const statusMap = { 
-            pause: "PAUSED", 
-            resume: "RUNNING", 
+        const statusMap = {
+            pause: "PAUSED",
+            resume: "RUNNING",
             stop: "STOPPED",
             start: "RUNNING"
         };
@@ -563,7 +618,7 @@ export default function Production() {
 
                 <button
                     onClick={handleStartProduction}
-                    disabled={loading || availableMachines.length === 0 || !operator}
+                    disabled={loading || availableMachines.length === 0 || !operator || !partNumber || !quantity || isNaN(parseInt(quantity)) || parseInt(quantity) < 1 || parseInt(quantity) > 1000}
                     className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg flex items-center gap-2 disabled:opacity-50"
                 >
                     {loading ? <RefreshCw size={18} className="animate-spin" /> : <Play size={18} />}
@@ -580,9 +635,10 @@ export default function Production() {
                     </h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {activeOrders.map((order) => {
-                            const stats = simProgress[order.id] || { units: 0, runtime: 0, value: 0 };
+                            const stats = simProgress[order.id] || { units: 0, runtime: 0, value: 0, operator: order.operator || 'SYSTEM', batchNumber: order.batchNumber || 'BT-SYNC-01', cycleTime: order.cycleTime || 30 };
                             const machine = machines.find(m => m.id === order.machineId);
-                            const cycleTime = MACHINE_CYCLE_TIMES[machine?.machineType] || 30;
+                            const cycleTime =
+                                Number(stats?.cycleTime || order.cycleTime || MACHINE_CYCLE_TIMES[machine?.machineType] || 30) || 30;
                             const remainingUnits = Math.max(0, order.quantity - stats.units);
                             const remainingTimeSec = remainingUnits * cycleTime;
                             const estFinish = new Date(Date.now() + (remainingTimeSec * 1000)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -596,8 +652,8 @@ export default function Production() {
                                         <div>
                                             <h3 className="font-black text-slate-900 uppercase tracking-tighter text-xl">{getMachineName(order.machineId)}</h3>
                                             <div className="flex items-center gap-2 mt-1">
-                                                <p className="text-xs text-blue-600 font-bold tracking-widest uppercase">Batch: {stats.batchNumber || 'BT-SYNC-01'}</p>
-                                                <span className="text-[10px] bg-blue-100 px-2 rounded font-bold text-blue-700">{stats.operator || 'SYSTEM'}</span>
+                                                <p className="text-xs text-blue-600 font-bold tracking-widest uppercase">Batch: {stats.batchNumber || order.batchNumber || 'BT-AUTO-01'}</p>
+                                                <span className="text-[10px] bg-blue-100 px-2 rounded font-bold text-blue-700">{stats.operator || order.operator || operator || 'SYSTEM'}</span>
                                             </div>
                                         </div>
                                         <div className={getStatusBadge(currentStatus)}>
@@ -676,22 +732,28 @@ export default function Production() {
                                         </div>
                                     </div>
 
-                                    <div className="flex gap-2 relative z-10">
+                                    <div className="grid grid-cols-2 gap-2 relative z-10">
                                         {currentStatus === 'RUNNING' || currentStatus === 'ACTIVE' ? (
-                                            <button onClick={() => handleAction(order.machineId, order.id, 'pause')} className="flex-1 bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-xl text-xs font-black uppercase tracking-tighter flex items-center justify-center gap-2 shadow-lg shadow-amber-200 transition-all">
-                                                <Pause size={16} /> PAUSE SYSTEM
+                                            <button onClick={() => handleAction(order.machineId, order.id, 'pause')} className="bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-xl text-[10px] font-black uppercase tracking-tighter flex items-center justify-center gap-2 shadow-lg shadow-amber-200 transition-all">
+                                                <Pause size={16} /> PAUSE
                                             </button>
                                         ) : currentStatus === 'PAUSED' ? (
-                                            <button onClick={() => handleAction(order.machineId, order.id, 'resume')} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl text-xs font-black uppercase tracking-tighter flex items-center justify-center gap-2 shadow-lg shadow-green-200 transition-all">
+                                            <button onClick={() => handleAction(order.machineId, order.id, 'resume')} className="bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl text-[10px] font-black uppercase tracking-tighter flex items-center justify-center gap-2 shadow-lg shadow-green-200 transition-all">
                                                 <Play size={16} /> RESUME UPLINK
                                             </button>
                                         ) : null}
-                                        
+
                                         {['RUNNING', 'PAUSED', 'ACTIVE'].includes(currentStatus) && (
-                                            <button onClick={() => handleAction(order.machineId, order.id, 'stop')} className="flex-1 bg-slate-800 hover:bg-black text-white py-3 rounded-xl text-xs font-black uppercase tracking-tighter flex items-center justify-center gap-2 transition-all">
-                                                <Square size={16} /> EMERGENCY STOP
+                                            <button onClick={() => handleAction(order.machineId, order.id, 'stop')} className="bg-slate-800 hover:bg-black text-white py-3 rounded-xl text-[10px] font-black uppercase tracking-tighter flex items-center justify-center gap-2 transition-all">
+                                                <Square size={16} /> STOP
                                             </button>
                                         )}
+                                        <button 
+                                            onClick={() => navigate(`/machines?search=${encodeURIComponent(getMachineName(order.machineId))}`)}
+                                            className="col-span-2 mt-1 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all"
+                                        >
+                                            <ExternalLink size={12} /> View Machine Profile & Stats
+                                        </button>
                                     </div>
                                 </div>
                             );
@@ -702,11 +764,24 @@ export default function Production() {
 
             {/* Orders Table */}
             <div className="bg-white rounded-xl shadow overflow-hidden">
-                <div className="p-5 border-b">
-                    <h2 className="text-xl font-semibold">Production Orders</h2>
-                    <p className="text-sm text-gray-500 mt-1">
-                        Active: {activeOrders.length} | Completed: {completedOrders.length} | Produced units: {producedUnits}
-                    </p>
+                <div className="p-5 border-b flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <h2 className="text-xl font-semibold">Production Orders</h2>
+                        <p className="text-sm text-gray-500 mt-1">
+                            Active: {activeOrders.length} | Completed: {completedOrders.length} | Produced units: {producedUnits}
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Filter by Machine:</span>
+                        <select 
+                            value={filterMachineId} 
+                            onChange={(e) => { setFilterMachineId(e.target.value); setCurrentPage(1); }}
+                            className="bg-white border-2 border-slate-200 rounded-xl px-4 py-2 text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition-all cursor-pointer"
+                        >
+                            <option value="ALL">ALL UNITS</option>
+                            {machines.map(m => <option key={m.id} value={m.id}>{m.machineName}</option>)}
+                        </select>
+                    </div>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
@@ -723,40 +798,79 @@ export default function Production() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
-                            {orders.length === 0 ? (
+                            {paginatedOrders.length === 0 ? ( // Use paginatedOrders for rendering
                                 <tr>
                                     <td colSpan="8" className="text-center py-10 text-gray-500">
-                                        No production orders
+                                        {orders.length === 0 ? "No production orders" : "No orders on this page"}
                                     </td>
                                 </tr>
                             ) : (
-                                orders.map((order) => {
+                                paginatedOrders.map((order) => { // Use paginatedOrders for rendering
+                                    const stats = simProgress[order.id] || { units: 0, runtime: 0, value: 0, operator: order.operator, batchNumber: order.batchNumber, cycleTime: order.cycleTime }; // Initialize stats with order properties
                                     const machine = machines.find(m => m.id === order.machineId);
-                                    const currentStatus = (simProgress[order.id]?.status || machine?.status || order.status || "IDLE").toUpperCase();
+                                    const produced =
+                                        stats.units || // Use stats.units for produced
+                                        (order.status === "COMPLETED" ? order.quantity : 0);
+
+                                    const currentStatus =
+                                        produced >= order.quantity
+                                            ? "COMPLETED"
+                                            : (stats.status || // Use stats.status for current status
+                                                machine?.status ||
+                                                order.status ||
+                                                "IDLE").toUpperCase();
 
                                     return (
-                                    <tr key={order.id} className="hover:bg-gray-50 transition">
-                                        <td className="px-6 py-4 text-sm">{order.id}</td>
-                                        <td className="px-6 py-4 font-semibold text-slate-700">{getMachineName(order.machineId)}</td>
-                                        <td className="px-6 py-4 font-medium">{order.partNumber}</td>
-                                        <td className="px-6 py-4">
-                                            <span className="font-bold text-blue-600">{simProgress[order.id]?.units || (order.status === 'COMPLETED' ? order.quantity : 0)}</span> / {order.quantity}
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <span className={`px-3 py-1 rounded-full text-[10px] font-bold ${getStatusBadge(currentStatus)}`}>
-                                                {currentStatus}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 text-sm font-bold text-slate-600">{simProgress[order.id]?.operator || order.operator || 'SYSTEM'}</td>
-                                        <td className="px-6 py-4 text-sm font-mono text-slate-500">{simProgress[order.id]?.startTime || (order.createdAt ? new Date(order.createdAt).toLocaleTimeString() : '-')}</td>
-                                        <td className="px-6 py-4 text-sm font-mono">{formatDuration(simProgress[order.id]?.runtime || 0)}</td>
-                                    </tr>
+                                        <tr key={order.id} className="hover:bg-gray-50 transition">
+                                            <td className="px-6 py-4 text-sm">{order.id}</td>
+                                            <td className="px-6 py-4 font-semibold text-slate-700">{getMachineName(order.machineId)}</td>
+                                            <td className="px-6 py-4 font-medium">{order.partNumber}</td>
+                                            <td className="px-6 py-4">
+                                                <span className="font-bold text-blue-600">{stats.units || (order.status === 'COMPLETED' ? order.quantity : 0)}</span> / {order.quantity}
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className={`px-3 py-1 rounded-full text-[10px] font-bold ${getStatusBadge(currentStatus)}`}>
+                                                    {currentStatus}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 text-sm font-bold text-slate-600">{stats.operator || order.operator || 'SYSTEM'}</td>
+                                            <td className="px-6 py-4 text-sm font-mono text-slate-500">{stats.startTime || (order.createdAt ? new Date(order.createdAt).toLocaleTimeString() : '-')}</td>
+                                            <td className="px-6 py-4 text-sm font-mono">{formatDuration(stats.runtime || 0)}</td>
+                                        </tr>
                                     );
                                 })
                             )}
                         </tbody>
                     </table>
                 </div>
+
+                {/* Pagination Controls */}
+                {totalPages > 1 && ( // Only show pagination if more than one page
+                    <div className="flex justify-between items-center px-6 py-4 border-t bg-gray-50/50">
+                        <div className="text-sm text-gray-500 font-medium">
+                            Showing <span className="text-slate-900">{(currentPage - 1) * ordersPerPage + 1}</span> to <span className="text-slate-900">{Math.min(currentPage * ordersPerPage, sortedOrders.length)}</span> of <span className="text-slate-900">{sortedOrders.length}</span> orders
+                        </div>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                disabled={currentPage === 1}
+                                className="p-2 rounded-lg border bg-white hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-sm"
+                            >
+                                <ChevronLeft size={18} />
+                            </button>
+                            <div className="flex items-center px-4 py-2 text-sm font-bold bg-white border rounded-lg shadow-sm">
+                                Page {currentPage} of {totalPages}
+                            </div>
+                            <button
+                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                disabled={currentPage === totalPages}
+                                className="p-2 rounded-lg border bg-white hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-sm"
+                            >
+                                <ChevronRight size={18} />
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
         </MainLayout>
     );

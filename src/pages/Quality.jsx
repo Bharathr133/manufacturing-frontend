@@ -44,13 +44,15 @@ export default function Quality() {
         machineId: "",
         partNumber: "",
         quantityProduced: "",
-        quantityPassed: "", // Will be auto-calculated
         quantityFailed: 0,
         quantityRework: 0,
         defectType: "",
         severity: "MINOR",
         inspector: "",
         comments: ""
+        // New fields for auto-population
+        // batchNumber: "",
+        // operator: "",
     });
 
     // State for dropdown data
@@ -153,35 +155,48 @@ export default function Quality() {
         loadData();
     };
 
-    const handleMachineChange = (mId) => {
-        if (!mId) {
-            setFormData({ ...formData, machineId: "", productionOrderId: "", partNumber: "", quantityProduced: "", quantityPassed: "", defectType: "" });
-            return;
-        }
-        const machineId = parseInt(mId);
-        // Find the most relevant order (Prefer active batches, then latest COMPLETED)
-        const relevantOrder = [...orders]
-            .filter(o => o.machineId === machineId)
-            .sort((a, b) => {
-                const aIsActive = ["ACTIVE", "RUNNING", "IN_PROGRESS", "active", "running"].includes(a.status);
-                const bIsActive = ["ACTIVE", "RUNNING", "IN_PROGRESS", "active", "running"].includes(b.status);
-                if (aIsActive && !bIsActive) return -1;
-                if (bIsActive && !aIsActive) return 1;
-                return (b.id || 0) - (a.id || 0);
-            })[0];
-
-        if (relevantOrder) {
+    const handleOrderChange = (orderId) => {
+        if (!orderId) {
             setFormData({
                 ...formData,
-                machineId: mId,
-                productionOrderId: relevantOrder.id.toString(),
-                partNumber: relevantOrder.partNumber,
-                quantityProduced: relevantOrder.quantity?.toString() || "0",
-                quantityPassed: relevantOrder.quantity?.toString() || "0",
-                defectType: "NONE"
+                productionOrderId: "",
+                machineId: "",
+                partNumber: "",
+                quantityProduced: "",
+                quantityPassed: "",
+                quantityFailed: 0,
+                quantityRework: 0,
+                defectType: "",
+                severity: "MINOR",
+                inspector: "", // Clear inspector too for new order
+                comments: "",
+                // batchNumber: "",
+                // operator: "",
+            });
+            return;
+        }
+        const selectedOrder = orders.find(o => o.id === parseInt(orderId));
+
+        if (selectedOrder) {
+            // Find machine name to display
+            const machineObj = machines.find(m => m.id === selectedOrder.machineId);
+            setFormData({
+                ...formData,
+                productionOrderId: orderId,
+                machineId: selectedOrder.machineId.toString(),
+                partNumber: selectedOrder.partNumber,
+                quantityProduced: selectedOrder.quantity?.toString() || "0",
+                quantityPassed: selectedOrder.quantity || 0, // Default to produced for auto-calc
+                quantityFailed: 0,
+                quantityRework: 0,
+                defectType: "NONE",
+                severity: "MINOR",
+                inspector: selectedOrder.operator || "",
+                comments: "",
             });
         } else {
-            setFormData({ ...formData, machineId: mId, productionOrderId: "", partNumber: "", quantityProduced: "", quantityPassed: "", defectType: "" });
+            // Clear relevant fields if no order is selected
+            setFormData({ ...formData, productionOrderId: "", machineId: "", partNumber: "", quantityProduced: "", quantityPassed: "", quantityFailed: 0, quantityRework: 0, defectType: "", severity: "MINOR", inspector: "", comments: "" });
         }
     };
 
@@ -190,25 +205,25 @@ export default function Quality() {
         setSubmitting(true);
 
         // Client-side validation for quantities
-        const produced = parseInt(formData.quantityProduced);
-        const passed = parseInt(formData.quantityPassed);
+        const produced = parseInt(formData.quantityProduced) || 0;
+        const passed = parseInt(formData.quantityPassed) || 0; // Auto-calculated
         const failed = parseInt(formData.quantityFailed) || 0;
         const rework = parseInt(formData.quantityRework) || 0;
 
         if (failed < 0 || rework < 0) {
-            alert("Validation Error: Quantities cannot be negative.");
+            alert("Validation Error: Rejected and Rework quantities cannot be negative.");
             setSubmitting(false);
             return;
         }
 
+        const totalInspected = passed + failed + rework;
+        if (totalInspected !== produced) {
+            alert(`Validation Error: Passed (${passed}) + Rejected (${failed}) + Rework (${rework}) must equal Produced (${produced}). Current sum: ${totalInspected}`);
+            setSubmitting(false);
+            return;
+        }
         if (failed + rework > produced) {
-            alert(`Validation Error: Rejected + Rework (${failed + rework}) cannot exceed Produced (${produced}).`);
-            setSubmitting(false);
-            return;
-        }
-
-        if (passed + failed + rework !== produced) {
-            alert(`Validation Error: Passed (${passed}) + Rejected (${failed}) + Rework (${rework}) must equal Produced (${produced}).`);
+            alert(`Validation Error: Rejected (${failed}) + Rework (${rework}) cannot exceed Produced (${produced}).`); // This check is redundant if the sum check is correct, but good for clarity
             setSubmitting(false);
             return;
         }
@@ -246,7 +261,7 @@ export default function Quality() {
             machineId: "",
             partNumber: "",
             quantityProduced: "",
-            quantityPassed: 0,
+            quantityPassed: "", // Reset to empty for auto-calc, will be 0 by useEffect
             quantityFailed: 0,
             quantityRework: 0,
             defectType: "",
@@ -534,41 +549,37 @@ export default function Quality() {
                                     <select
                                         required
                                         value={formData.productionOrderId}
-                                        onChange={(e) => setFormData({ ...formData, productionOrderId: e.target.value })}
+                                        onChange={(e) => handleOrderChange(e.target.value)}
                                         className="w-full border p-2 rounded-lg bg-gray-50"
                                     >
                                         <option value="">Select Order</option>
-                                        {orders.map(order => (
-                                            <option key={order.id} value={order.id}>Order #{order.id} - {order.partNumber}</option>
+                                        {orders
+                                            .filter(o => o.status === 'COMPLETED' && !qualityChecks.some(qc => qc.productionOrderId === o.id))
+                                            .map(order => ( // Only allow completed orders that haven't been checked yet
+                                            <option key={order.id} value={order.id}>
+                                                Order #{order.id} - {order.partNumber} ({order.status})
+                                            </option>
                                         ))}
                                     </select>
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium mb-1">Machine *</label>
-                                    <select
-                                        required
-                                        value={formData.machineId}
-                                        onChange={(e) => handleMachineChange(e.target.value)}
-                                        className="w-full border p-2 rounded-lg"
-                                    >
-                                        <option value="">Select Machine</option>
-                                        {machines.filter(m => orders.some(o => o.machineId === m.id)).map(machine => (
-                                            <option key={machine.id} value={machine.id}>{machine.machineName}</option>
-                                        ))}
-                                    </select>
-                                    {formData.machineId && !formData.productionOrderId && (
-                                        <p className="text-xs text-amber-600 mt-1">⚠ No active production found on this unit.</p>
-                                    )}
+                                    <input
+                                        type="text"
+                                        disabled
+                                        value={formData.machineId ? (machines.find(m => m.id === parseInt(formData.machineId))?.machineName || "Machine Not Found") : ""}
+                                        className="w-full border p-2 rounded-lg bg-gray-100 font-bold text-slate-700"
+                                        placeholder="Auto-populated"
+                                    />
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium mb-1">Part Number *</label>
                                     <input
                                         type="text"
-                                        required
+                                        disabled
                                         value={formData.partNumber}
-                                        onChange={(e) => setFormData({ ...formData, partNumber: e.target.value })}
-                                        className="w-full border p-2 rounded-lg bg-gray-50"
-                                        placeholder="GEAR-001"
+                                        className="w-full border p-2 rounded-lg bg-gray-100 font-bold text-slate-700"
+                                        placeholder="Auto-populated"
                                     />
                                 </div>
                                 <div>
@@ -618,17 +629,6 @@ export default function Quality() {
                                         disabled
                                         value={formData.quantityPassed}
                                         className="w-full border p-2 rounded-lg bg-green-50 font-black text-green-700"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium mb-1">Quantity Rejected *</label>
-                                    <input
-                                        type="number"
-                                        required
-                                        value={formData.quantityFailed}
-                                        onChange={(e) => setFormData({ ...formData, quantityFailed: e.target.value })}
-                                        className="w-full border p-2 rounded-lg"
-                                        placeholder="5"
                                     />
                                 </div>
                                 <div>

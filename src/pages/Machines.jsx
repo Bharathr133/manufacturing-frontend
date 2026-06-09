@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom"; // Import useSearchParams
 import MainLayout from "../layouts/MainLayout";
 import { getMachines, createMachine, updateMachine } from "../api/machineApi";
 import { Search, Edit2, X, ChevronLeft, ChevronRight, Settings, Hammer, Zap, Crosshair, Box } from "lucide-react";
 
 export default function Machines() {
+    const [searchParams] = useSearchParams();
     // Fixed 4 Real Machines Configuration
     const INDUSTRIAL_UNITS = [
         { name: "CNC Turning Center", type: "TURNING", icon: <Settings className="text-blue-500" /> },
@@ -14,7 +16,7 @@ export default function Machines() {
 
     const [machines, setMachines] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [search, setSearch] = useState("");
+    const [search, setSearch] = useState(searchParams.get("search") || ""); // Initialize search from URL params
     const [modalOpen, setModalOpen] = useState(false);
     const [editingId, setEditingId] = useState(null);
     const [formData, setFormData] = useState({ machineName: "", machineType: "", status: "IDLE" });
