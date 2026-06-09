@@ -44,7 +44,9 @@ export default function Quality() {
         machineId: "",
         partNumber: "",
         quantityProduced: "",
-        quantityPassed: "",
+        quantityPassed: 0,
+        quantityFailed: 0,
+        quantityRework: 0,
         defectType: "",
         severity: "MINOR",
         inspector: "",
@@ -65,6 +67,18 @@ export default function Quality() {
         loadMachines();
         loadOrders();
     }, []);
+
+    // Auto-calculate Passed Quantity based on Rejected and Rework
+    useEffect(() => {
+        const produced = parseInt(formData.quantityProduced) || 0;
+        const rejected = parseInt(formData.quantityFailed) || 0;
+        const rework = parseInt(formData.quantityRework) || 0;
+        
+        setFormData(prev => ({
+            ...prev,
+            quantityPassed: Math.max(0, produced - rejected - rework)
+        }));
+    }, [formData.quantityProduced, formData.quantityFailed, formData.quantityRework]);
 
     const loadData = async () => {
         setLoading(true);
@@ -141,19 +155,19 @@ export default function Quality() {
 
     const handleMachineChange = (mId) => {
         if (!mId) {
-            setFormData({ ...formData, machineId: "", productionOrderId: "", partNumber: "", quantityProduced: "", quantityPassed: "" });
+            setFormData({ ...formData, machineId: "", productionOrderId: "", partNumber: "", quantityProduced: "", quantityPassed: "", defectType: "" });
             return;
         }
         const machineId = parseInt(mId);
-        // Find the most relevant order (Prefer ACTIVE/RUNNING/IN_PROGRESS batches, then latest COMPLETED)
+        // Find the most relevant order (Prefer active batches, then latest COMPLETED)
         const relevantOrder = [...orders]
             .filter(o => o.machineId === machineId)
             .sort((a, b) => {
-                const aIsActive = ["ACTIVE", "RUNNING", "IN_PROGRESS"].includes(a.status);
-                const bIsActive = ["ACTIVE", "RUNNING", "IN_PROGRESS"].includes(b.status);
+                const aIsActive = ["ACTIVE", "RUNNING", "IN_PROGRESS", "active", "running"].includes(a.status);
+                const bIsActive = ["ACTIVE", "RUNNING", "IN_PROGRESS", "active", "running"].includes(b.status);
                 if (aIsActive && !bIsActive) return -1;
                 if (bIsActive && !aIsActive) return 1;
-                return (b.id || 0) - (a.id || 0); // Latest first
+                return (b.id || 0) - (a.id || 0);
             })[0];
 
         if (relevantOrder) {
@@ -162,11 +176,12 @@ export default function Quality() {
                 machineId: mId,
                 productionOrderId: relevantOrder.id.toString(),
                 partNumber: relevantOrder.partNumber,
-                quantityProduced: relevantOrder.quantity.toString(),
-                quantityPassed: relevantOrder.quantity.toString() // Default pass all
+                quantityProduced: relevantOrder.quantity?.toString() || "0",
+                quantityPassed: relevantOrder.quantity?.toString() || "0",
+                defectType: "NONE"
             });
         } else {
-            setFormData({ ...formData, machineId: mId, productionOrderId: "", partNumber: "", quantityProduced: "", quantityPassed: "" });
+            setFormData({ ...formData, machineId: mId, productionOrderId: "", partNumber: "", quantityProduced: "", quantityPassed: "", defectType: "" });
         }
     };
 
@@ -177,19 +192,17 @@ export default function Quality() {
         // Client-side validation for quantities
         const produced = parseInt(formData.quantityProduced);
         const passed = parseInt(formData.quantityPassed);
+        const failed = parseInt(formData.quantityFailed) || 0;
+        const rework = parseInt(formData.quantityRework) || 0;
 
-        if (isNaN(produced) || produced < 1) {
-            alert("Validation Error: Quantity Produced must be at least 1.");
+        if (failed < 0 || rework < 0) {
+            alert("Validation Error: Quantities cannot be negative.");
             setSubmitting(false);
             return;
         }
-        if (isNaN(passed) || passed < 0) {
-            alert("Validation Error: Quantity Passed cannot be negative.");
-            setSubmitting(false);
-            return;
-        }
-        if (passed > produced) {
-            alert("Validation Error: Quantity Passed cannot exceed Quantity Produced.");
+
+        if (failed + rework > produced) {
+            alert(`Validation Error: Rejected + Rework (${failed + rework}) cannot exceed Produced (${produced}).`);
             setSubmitting(false);
             return;
         }
@@ -563,24 +576,49 @@ export default function Quality() {
                                     <label className="block text-sm font-medium mb-1">Quantity Produced *</label>
                                     <input
                                         type="number"
-                                        min="1"
-                                        required
+                                        disabled
                                         value={formData.quantityProduced}
-                                        onChange={(e) => setFormData({ ...formData, quantityProduced: Math.max(0, e.target.value) })}
-                                        className="w-full border p-2 rounded-lg"
-                                        placeholder="100"
+                                        className="w-full border p-2 rounded-lg bg-gray-100 font-bold text-slate-700"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium mb-1">Quantity Passed *</label>
+                                    <label className="block text-sm font-medium mb-1">Rejected Quantity</label>
                                     <input
                                         type="number"
-                                        min="0"
-                                        required
+                                        value={formData.quantityFailed}
+                                        onChange={(e) => setFormData({ ...formData, quantityFailed: e.target.value })}
+                                        className="w-full border p-2 rounded-lg border-red-200 focus:ring-red-500"
+                                        placeholder="Enter Rejected"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Rework Quantity</label>
+                                    <input
+                                        type="number"
+                                        value={formData.quantityRework}
+                                        onChange={(e) => setFormData({ ...formData, quantityRework: e.target.value })}
+                                        className="w-full border p-2 rounded-lg border-yellow-200 focus:ring-yellow-500"
+                                        placeholder="Enter Rework"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Passed (Auto-Calculated)</label>
+                                    <input
+                                        type="number"
+                                        disabled
                                         value={formData.quantityPassed}
-                                        onChange={(e) => setFormData({ ...formData, quantityPassed: Math.max(0, e.target.value) })}
+                                        className="w-full border p-2 rounded-lg bg-green-50 font-black text-green-700"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Quantity Rejected *</label>
+                                    <input
+                                        type="number"
+                                        required
+                                        value={formData.quantityFailed}
+                                        onChange={(e) => setFormData({ ...formData, quantityFailed: e.target.value })}
                                         className="w-full border p-2 rounded-lg"
-                                        placeholder="95"
+                                        placeholder="5"
                                     />
                                 </div>
                                 <div>

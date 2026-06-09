@@ -1,9 +1,17 @@
 import { useEffect, useState } from "react";
 import MainLayout from "../layouts/MainLayout";
 import { getMachines, createMachine, updateMachine } from "../api/machineApi";
-import { Search, Edit2, Plus, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Edit2, X, ChevronLeft, ChevronRight, Settings, Hammer, Zap, Crosshair, Box } from "lucide-react";
 
 export default function Machines() {
+    // Fixed 4 Real Machines Configuration
+    const INDUSTRIAL_UNITS = [
+        { name: "CNC Turning Center", type: "TURNING", icon: <Settings className="text-blue-500" /> },
+        { name: "CNC Milling Machine", type: "MILLING", icon: <Zap className="text-amber-500" /> },
+        { name: "Hydraulic Press Machine", type: "PRESS", icon: <Hammer className="text-emerald-500" /> },
+        { name: "Injection Molding Machine", type: "MOLDING", icon: <Box className="text-red-500" /> }
+    ];
+
     const [machines, setMachines] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
@@ -38,6 +46,24 @@ export default function Machines() {
         }
     };
 
+    const initializeMachines = async () => {
+        setLoading(true);
+        try {
+            for (const unit of INDUSTRIAL_UNITS) {
+                await createMachine({
+                    machineName: unit.name,
+                    machineType: unit.type
+                });
+            }
+            showToast("Factory initialized with 4 units", "success");
+            loadMachines();
+        } catch (error) {
+            showToast("Initialization failed", "error");
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleSubmit = async () => {
         // Validation
         if (!formData.machineName.trim()) {
@@ -57,13 +83,8 @@ export default function Machines() {
             if (editingId) {
                 await updateMachine(editingId, formData);
                 showToast("Machine updated successfully", "success");
-            } else {
-                await createMachine({
-                    machineName: formData.machineName.trim(),
-                    machineType: formData.machineType,
-                });
-                showToast("Machine created in IDLE status", "success");
             }
+            // "Add Machine" is disabled as per request to keep exactly 4 machines
             setModalOpen(false);
             resetForm();
             loadMachines();
@@ -102,18 +123,20 @@ export default function Machines() {
     );
 
     const getStatusBadge = (status) => {
-        const s = (status && ["RUNNING", "STOPPED", "MAINTENANCE"].includes(status)) ? status : "IDLE";
+        const s = status?.toUpperCase() || "IDLE";
         const statusMap = {
             RUNNING: "bg-green-100 text-green-800",
             STOPPED: "bg-red-100 text-red-800",
-            IDLE: "bg-yellow-100 text-yellow-800",
-            MAINTENANCE: "bg-gray-100 text-gray-800",
+            IDLE: "bg-slate-100 text-slate-500",
+            PAUSED: "bg-amber-100 text-amber-800 border border-amber-200",
+            COMPLETED: "bg-blue-100 text-blue-800",
+            MAINTENANCE: "bg-slate-100 text-slate-800",
         };
-        return statusMap[s] || "bg-blue-100 text-blue-800";
+        return statusMap[s] || "bg-gray-100 text-gray-800";
     };
 
     // Machine types for dropdown
-    const machineTypes = ["CNC", "LATHE", "MILL", "DRILL", "GRINDER"];
+    const machineTypes = ["TURNING", "MILLING", "PRESS", "MOLDING"];
     const statusOptions = ["RUNNING", "STOPPED", "IDLE", "MAINTENANCE"];
 
     return (
@@ -121,17 +144,17 @@ export default function Machines() {
             <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
                 <div>
                     <h1 className="text-3xl font-bold text-gray-800">Machines</h1>
-                    <p className="text-gray-500 mt-1">Manage your equipment</p>
+                    <p className="text-gray-500 mt-1">Real-time Equipment Monitoring (4 Units Active)</p>
                 </div>
-                <button
-                    onClick={() => {
-                        resetForm();
-                        setModalOpen(true);
-                    }}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg flex items-center gap-2 transition"
-                >
-                    <Plus size={18} /> Add Machine
-                </button>
+                {machines.length === 0 && !loading && (
+                    <button
+                        onClick={initializeMachines}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-lg flex items-center gap-2 transition shadow-lg animate-bounce"
+                    >
+                        <Settings size={18} />
+                        Initialize Factory Units
+                    </button>
+                )}
             </div>
 
             {/* Search Bar */}
@@ -157,6 +180,7 @@ export default function Machines() {
                             <tr>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Preview</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
@@ -182,10 +206,15 @@ export default function Machines() {
                                     <tr key={machine.id} className="hover:bg-gray-50 transition">
                                         <td className="px-6 py-4 text-sm">{machine.id}</td>
                                         <td className="px-6 py-4 font-medium">{machine.machineName}</td>
+                                        <td className="px-6 py-4">
+                                            <div className="p-2 bg-slate-100 rounded-lg w-fit">
+                                                {INDUSTRIAL_UNITS.find(u => u.type === machine.machineType)?.icon || <Settings />}
+                                            </div>
+                                        </td>
                                         <td className="px-6 py-4 text-sm text-gray-600">{machine.machineType}</td>
                                         <td className="px-6 py-4">
                                             <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusBadge(machine.status)}`}>
-                                                {(machine.status && ["RUNNING", "STOPPED", "MAINTENANCE"].includes(machine.status)) ? machine.status : "IDLE"}
+                                                {(machine.status === "RUNNING" || machine.status === "STOPPED" || machine.status === "MAINTENANCE") ? machine.status : "IDLE"}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 text-right space-x-2">
