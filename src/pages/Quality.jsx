@@ -140,20 +140,31 @@ export default function Quality() {
     };
 
     const handleMachineChange = (mId) => {
+        if (!mId) {
+            setFormData({ ...formData, machineId: "", productionOrderId: "", partNumber: "", quantityProduced: "" });
+            return;
+        }
         const machineId = parseInt(mId);
-        // Find the most recent active order for this machine
-        const activeOrder = orders.find(o => o.machineId === machineId && o.status === "ACTIVE");
+        // Find the most relevant order (Prefer ACTIVE batches, then latest COMPLETED)
+        const relevantOrder = [...orders]
+            .filter(o => o.machineId === machineId)
+            .sort((a, b) => {
+                if (a.status === "ACTIVE" && b.status !== "ACTIVE") return -1;
+                if (b.status === "ACTIVE" && a.status !== "ACTIVE") return 1;
+                return (b.id || 0) - (a.id || 0);
+            })[0];
 
-        if (activeOrder) {
+        if (relevantOrder) {
             setFormData({
                 ...formData,
                 machineId: mId,
-                productionOrderId: activeOrder.id.toString(),
-                partNumber: activeOrder.partNumber,
-                quantityProduced: activeOrder.quantity.toString()
+                productionOrderId: relevantOrder.id.toString(),
+                partNumber: relevantOrder.partNumber,
+                quantityProduced: relevantOrder.quantity.toString(),
+                quantityPassed: relevantOrder.quantity.toString() // Default pass all
             });
         } else {
-            setFormData({ ...formData, machineId: mId, productionOrderId: "", partNumber: "" });
+            setFormData({ ...formData, machineId: mId, productionOrderId: "", partNumber: "", quantityProduced: "" });
         }
     };
 
@@ -529,9 +540,10 @@ export default function Quality() {
                                     <label className="block text-sm font-medium mb-1">Quantity Produced *</label>
                                     <input
                                         type="number"
+                                        min="0"
                                         required
                                         value={formData.quantityProduced}
-                                        onChange={(e) => setFormData({ ...formData, quantityProduced: e.target.value })}
+                                        onChange={(e) => setFormData({ ...formData, quantityProduced: Math.max(0, e.target.value) })}
                                         className="w-full border p-2 rounded-lg"
                                         placeholder="100"
                                     />
@@ -540,9 +552,10 @@ export default function Quality() {
                                     <label className="block text-sm font-medium mb-1">Quantity Passed *</label>
                                     <input
                                         type="number"
+                                        min="0"
                                         required
                                         value={formData.quantityPassed}
-                                        onChange={(e) => setFormData({ ...formData, quantityPassed: e.target.value })}
+                                        onChange={(e) => setFormData({ ...formData, quantityPassed: Math.max(0, e.target.value) })}
                                         className="w-full border p-2 rounded-lg"
                                         placeholder="95"
                                     />

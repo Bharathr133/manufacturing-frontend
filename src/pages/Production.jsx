@@ -276,9 +276,11 @@ export default function Production() {
                         <label className="block text-sm font-medium mb-1">Quantity * (1-1000)</label>
                         <input
                             type="number"
+                            min="1"
+                            max="1000"
                             value={quantity}
                             onChange={(e) => setQuantity(e.target.value)}
-                            placeholder="Planned units"
+                            placeholder="Planned units (1-1000)"
                             className="border p-2 rounded-lg w-full focus:ring-2 focus:ring-blue-500"
                         />
                     </div>
