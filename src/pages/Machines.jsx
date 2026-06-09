@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import MainLayout from "../layouts/MainLayout";
-import { getMachines, createMachine, updateMachine, deleteMachine } from "../api/machineApi";
-import { Search, Edit2, Trash2, Plus, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { getMachines, createMachine, updateMachine } from "../api/machineApi";
+import { Search, Edit2, Plus, X, ChevronLeft, ChevronRight } from "lucide-react";
 
 export default function Machines() {
     const [machines, setMachines] = useState([]);
@@ -10,7 +10,6 @@ export default function Machines() {
     const [modalOpen, setModalOpen] = useState(false);
     const [editingId, setEditingId] = useState(null);
     const [formData, setFormData] = useState({ machineName: "", machineType: "", status: "IDLE" });
-    const [deleteConfirm, setDeleteConfirm] = useState(null);
     const [toast, setToast] = useState({ show: false, message: "", type: "success" });
 
     // Pagination
@@ -74,18 +73,6 @@ export default function Machines() {
         }
     };
 
-    const handleDelete = async (id) => {
-        try {
-            await deleteMachine(id);
-            showToast("Machine deleted successfully", "success");
-            loadMachines();
-        } catch (error) {
-            const errorMsg = error.response?.data?.message || "Delete failed";
-            showToast(errorMsg, "error");
-        }
-        setDeleteConfirm(null);
-    };
-
     const resetForm = () => {
         setEditingId(null);
         setFormData({ machineName: "", machineType: "", status: "IDLE" });
@@ -120,7 +107,7 @@ export default function Machines() {
             IDLE: "bg-yellow-100 text-yellow-800",
             MAINTENANCE: "bg-gray-100 text-gray-800",
         };
-        return statusMap[status] || "bg-blue-100 text-blue-800";
+        return statusMap[status] || "bg-blue-100 text-blue-800"; // IDLE by default for new
     };
 
     // Machine types for dropdown
@@ -196,15 +183,12 @@ export default function Machines() {
                                         <td className="px-6 py-4 text-sm text-gray-600">{machine.machineType}</td>
                                         <td className="px-6 py-4">
                                             <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusBadge(machine.status)}`}>
-                                                {machine.status || "UNKNOWN"}
+                                                {machine.status || "IDLE"}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 text-right space-x-2">
                                             <button onClick={() => openEditModal(machine)} className="text-yellow-600 hover:text-yellow-800">
                                                 <Edit2 size={18} />
-                                            </button>
-                                            <button onClick={() => setDeleteConfirm(machine.id)} className="text-red-600 hover:text-red-800 ml-2">
-                                                <Trash2 size={18} />
                                             </button>
                                         </td>
                                     </tr>
@@ -300,24 +284,6 @@ export default function Machines() {
                             </button>
                             <button onClick={handleSubmit} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
                                 {editingId ? "Update" : "Create"}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Delete Confirmation */}
-            {deleteConfirm && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-xl p-6 max-w-sm">
-                        <h3 className="text-lg font-semibold">Confirm Delete</h3>
-                        <p className="text-gray-600 mt-2">Are you sure? This action cannot be undone.</p>
-                        <div className="flex justify-end gap-3 mt-6">
-                            <button onClick={() => setDeleteConfirm(null)} className="px-4 py-2 border rounded-lg hover:bg-gray-50">
-                                Cancel
-                            </button>
-                            <button onClick={() => handleDelete(deleteConfirm)} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
-                                Delete
                             </button>
                         </div>
                     </div>

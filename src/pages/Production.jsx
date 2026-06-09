@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import MainLayout from "../layouts/MainLayout";
-import { startProduction, getOrders, completeProduction } from "../api/productionApi";
+import { startProduction, getOrders, completeProduction, PRODUCTION_PART_TEMPLATES } from "../api/productionApi";
 import { getMachines } from "../api/machineApi";
 import { Play, RefreshCw, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
 
 export default function Production() {
     const [machineId, setMachineId] = useState("");
     const [partNumber, setPartNumber] = useState("");
+    const [customPart, setCustomPart] = useState("");
     const [quantity, setQuantity] = useState("");
     const [machines, setMachines] = useState([]);
     const [orders, setOrders] = useState([]);
@@ -82,7 +83,8 @@ export default function Production() {
             return;
         }
 
-        if (!partNumber.trim()) {
+        const finalPartNumber = partNumber === "CUSTOM" ? customPart.trim() : partNumber;
+        if (!finalPartNumber) {
             alert("Validation Error: Part number is required");
             return;
         }
@@ -96,13 +98,14 @@ export default function Production() {
 
         try {
             const res = await startProduction(machineId, {
-                partNumber: partNumber.trim(),
+                partNumber: finalPartNumber,
                 quantity: Number(quantity),
             });
 
             alert(`Success: ${getResponseMessage(res.data, "Production started successfully")}`);
             await Promise.all([loadOrders(), loadMachines()]);
             setPartNumber("");
+            setCustomPart("");
             setQuantity("");
             setMachineId("");
         } catch (error) {
@@ -212,13 +215,25 @@ export default function Production() {
 
                     <div>
                         <label className="block text-sm font-medium mb-1">Part Number *</label>
-                        <input
-                            type="text"
+                        <select
                             value={partNumber}
                             onChange={(e) => setPartNumber(e.target.value)}
-                            placeholder="Example: GEAR-001"
                             className="border p-2 rounded-lg w-full focus:ring-2 focus:ring-blue-500"
-                        />
+                        >
+                            <option value="">Select Part Template</option>
+                            {PRODUCTION_PART_TEMPLATES.map(t => (
+                                <option key={t.id} value={t.id}>{t.name}</option>
+                            ))}
+                        </select>
+                        {partNumber === "CUSTOM" && (
+                            <input
+                                type="text"
+                                value={customPart}
+                                onChange={(e) => setCustomPart(e.target.value)}
+                                placeholder="Enter Custom Serial..."
+                                className="mt-2 border p-2 rounded-lg w-full border-blue-300"
+                            />
+                        )}
                     </div>
 
                     <div>

@@ -139,6 +139,24 @@ export default function Quality() {
         loadData();
     };
 
+    const handleMachineChange = (mId) => {
+        const machineId = parseInt(mId);
+        // Find the most recent active order for this machine
+        const activeOrder = orders.find(o => o.machineId === machineId && o.status === "ACTIVE");
+
+        if (activeOrder) {
+            setFormData({
+                ...formData,
+                machineId: mId,
+                productionOrderId: activeOrder.id.toString(),
+                partNumber: activeOrder.partNumber,
+                quantityProduced: activeOrder.quantity.toString()
+            });
+        } else {
+            setFormData({ ...formData, machineId: mId, productionOrderId: "", partNumber: "" });
+        }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setSubmitting(true);
@@ -460,7 +478,7 @@ export default function Quality() {
                                         required
                                         value={formData.productionOrderId}
                                         onChange={(e) => setFormData({ ...formData, productionOrderId: e.target.value })}
-                                        className="w-full border p-2 rounded-lg"
+                                        className="w-full border p-2 rounded-lg bg-gray-50"
                                     >
                                         <option value="">Select Order</option>
                                         {orders.map(order => (
@@ -473,7 +491,7 @@ export default function Quality() {
                                     <select
                                         required
                                         value={formData.machineId}
-                                        onChange={(e) => setFormData({ ...formData, machineId: e.target.value })}
+                                        onChange={(e) => handleMachineChange(e.target.value)}
                                         className="w-full border p-2 rounded-lg"
                                     >
                                         <option value="">Select Machine</option>
@@ -481,6 +499,9 @@ export default function Quality() {
                                             <option key={machine.id} value={machine.id}>{machine.machineName}</option>
                                         ))}
                                     </select>
+                                    {formData.machineId && !formData.productionOrderId && (
+                                        <p className="text-xs text-amber-600 mt-1">⚠ No active production found on this unit.</p>
+                                    )}
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium mb-1">Part Number *</label>
@@ -489,7 +510,7 @@ export default function Quality() {
                                         required
                                         value={formData.partNumber}
                                         onChange={(e) => setFormData({ ...formData, partNumber: e.target.value })}
-                                        className="w-full border p-2 rounded-lg"
+                                        className="w-full border p-2 rounded-lg bg-gray-50"
                                         placeholder="GEAR-001"
                                     />
                                 </div>
