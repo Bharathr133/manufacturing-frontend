@@ -80,10 +80,11 @@ export default function Machines() {
 
     const openEditModal = (machine) => {
         setEditingId(machine.id);
+        const normalizedStatus = (!machine.status || machine.status === "UNKNOWN") ? "IDLE" : machine.status;
         setFormData({
             machineName: machine.machineName,
             machineType: machine.machineType,
-            status: machine.status,
+            status: normalizedStatus,
         });
         setModalOpen(true);
     };
@@ -101,7 +102,7 @@ export default function Machines() {
     );
 
     const getStatusBadge = (status) => {
-        const s = (!status || status === "UNKNOWN") ? "IDLE" : status;
+        const s = (status === "RUNNING" || status === "STOPPED" || status === "MAINTENANCE") ? status : "IDLE";
         const statusMap = {
             RUNNING: "bg-green-100 text-green-800",
             STOPPED: "bg-red-100 text-red-800",
@@ -184,7 +185,7 @@ export default function Machines() {
                                         <td className="px-6 py-4 text-sm text-gray-600">{machine.machineType}</td>
                                         <td className="px-6 py-4">
                                             <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusBadge(machine.status)}`}>
-                                                {(!machine.status || machine.status === "UNKNOWN") ? "IDLE" : machine.status}
+                                                {(machine.status === "RUNNING" || machine.status === "STOPPED" || machine.status === "MAINTENANCE") ? machine.status : "IDLE"}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 text-right space-x-2">

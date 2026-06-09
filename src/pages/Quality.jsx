@@ -506,7 +506,7 @@ export default function Quality() {
                                         className="w-full border p-2 rounded-lg"
                                     >
                                         <option value="">Select Machine</option>
-                                        {machines.map(machine => (
+                                        {machines.filter(m => orders.some(o => o.machineId === m.id)).map(machine => (
                                             <option key={machine.id} value={machine.id}>{machine.machineName}</option>
                                         ))}
                                     </select>
