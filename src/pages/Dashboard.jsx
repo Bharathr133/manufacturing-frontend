@@ -893,7 +893,7 @@ export default function Dashboard() {
 
                 {/* Service health bar — only when something offline */}
                 {Object.values(services).some(s => s === SERVICE_STATUS.OFFLINE) && (
-                    <ServiceHealthBar services={services} />
+                    <SystemBanner services={services} onRetry={fetchAll} />
                 )}
 
                 {/* ── MACHINES — renders as soon as machine fetch resolves ── */}
@@ -901,27 +901,25 @@ export default function Dashboard() {
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, marginBottom: 24 }}>
                     {services.machines === SERVICE_STATUS.LOADING ? (
                         <><SkeletonCard /><SkeletonCard /></>
+                    ) : services.machines === SERVICE_STATUS.OFFLINE ? (
+                        <SectionUnavailable />
                     ) : (
                         <>
                             <StatCard
                                 label="Total Machines"
-                                value={services.machines === SERVICE_STATUS.OFFLINE ? "—" : machineStats.machineCount}
+                                value={machineStats.machineCount}
                                 icon={<Cpu size={20} color="#6366f1" />}
                                 accent="#6366f1" accentBg="#eef2ff"
                                 sub="Registered equipment"
                                 onClick={() => navigate("/machines")}
-                                offline={services.machines === SERVICE_STATUS.OFFLINE}
-                                offlineMsg="Machine service offline"
                             />
                             <StatCard
                                 label="Running Now"
-                                value={services.machines === SERVICE_STATUS.OFFLINE ? "—" : machineStats.runningCount}
+                                value={machineStats.runningCount}
                                 icon={<Activity size={20} color="#10b981" />}
                                 accent="#10b981" accentBg="#f0fdf4"
-                                sub={services.machines === SERVICE_STATUS.ONLINE ? `${uptimePct}% uptime` : "—"}
+                                sub={`${uptimePct}% uptime`}
                                 onClick={() => navigate("/machines")}
-                                offline={services.machines === SERVICE_STATUS.OFFLINE}
-                                offlineMsg="Machine service offline"
                             />
                             {services.machines === SERVICE_STATUS.ONLINE && machineStats.machineCount > 0 && (
                                 <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "18px 20px", display: "flex", flexDirection: "column", gap: 8, gridColumn: "span 2" }}>
@@ -947,18 +945,16 @@ export default function Dashboard() {
                     <>
                         <SectionLabel title="Production" subtitle="Orders and scheduling" />
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, marginBottom: 24 }}>
-                            {services.production === SERVICE_STATUS.LOADING ? (
-                                <SkeletonCard />
+                            {services.production === SERVICE_STATUS.OFFLINE ? (
+                                <SectionUnavailable />
                             ) : (
                                 <StatCard
                                     label="Production Orders"
-                                    value={services.production === SERVICE_STATUS.OFFLINE ? "—" : productionStats.orderCount}
+                                    value={productionStats.orderCount}
                                     icon={<Package size={20} color="#8b5cf6" />}
                                     accent="#8b5cf6" accentBg="#f5f3ff"
                                     sub="Total orders created"
                                     onClick={() => navigate("/production")}
-                                    offline={services.production === SERVICE_STATUS.OFFLINE}
-                                    offlineMsg="Production service offline"
                                 />
                             )}
                         </div>
@@ -974,7 +970,7 @@ export default function Dashboard() {
                                 {[1,2,3,4,5].map(i => <SkeletonCard key={i} />)}
                             </div>
                         ) : services.quality === SERVICE_STATUS.OFFLINE ? (
-                            <OfflineAlert service="Quality" onRetry={fetchQuality} />
+                            <SectionUnavailable />
                         ) : (
                             <>
                                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16, marginBottom: 16 }}>
@@ -1169,44 +1165,50 @@ function StatusBadge({ status }) {
     );
 }
 
-function ServiceHealthBar({ services }) {
-    const items = [
-        { key: "machines",   label: "Machines"   },
-        { key: "production", label: "Production" },
-        { key: "quality",    label: "Quality"    },
-    ];
+function SystemBanner({ services, onRetry }) {
+    const allOffline = Object.values(services).every(s => s === SERVICE_STATUS.OFFLINE);
+    const anyOffline = Object.values(services).some(s => s === SERVICE_STATUS.OFFLINE);
+    if (!anyOffline) return null;
+
     return (
-        <div style={{ display: "flex", gap: 8, marginBottom: 28, flexWrap: "wrap" }}>
-            {items.map(({ key, label }) => {
-                const s = services[key];
-                const isOnline  = s === "online";
-                const isLoading = s === "loading";
-                return (
-                    <div key={key} style={{ display: "flex", alignItems: "center", gap: 6, background: isLoading ? "#f8fafc" : isOnline ? "#f0fdf4" : "#fef2f2", border: `1px solid ${isLoading ? "#e2e8f0" : isOnline ? "#bbf7d0" : "#fecaca"}`, borderRadius: 20, padding: "4px 12px 4px 10px", fontSize: 12, fontWeight: 600, color: isLoading ? "#94a3b8" : isOnline ? "#166534" : "#991b1b" }}>
-                        <div style={{ width: 8, height: 8, borderRadius: "50%", background: isLoading ? "#cbd5e1" : isOnline ? "#22c55e" : "#ef4444", boxShadow: isOnline ? "0 0 0 2px #bbf7d0" : "none" }} />
-                        {label}: {isLoading ? "…" : isOnline ? "Online" : "Offline"}
-                    </div>
-                );
-            })}
+        <div style={{
+            background: "#fffbeb", border: "1px solid #fde68a",
+            borderRadius: 10, padding: "14px 18px", marginBottom: 24,
+            display: "flex", alignItems: "center", gap: 12
+        }}>
+            <AlertTriangle size={16} color="#b45309" flexShrink={0} />
+            <p style={{ margin: 0, fontSize: 13, color: "#92400e", lineHeight: 1.5 }}>
+                {allOffline
+                    ? "🔧 We're performing some maintenance. Please check back in a few minutes."
+                    : "⚠️ Some sections are temporarily unavailable. We're working on it."
+                }
+            </p>
+            <button
+                onClick={onRetry}
+                style={{
+                    marginLeft: "auto", whiteSpace: "nowrap", fontSize: 12,
+                    fontWeight: 600, color: "#92400e", background: "none",
+                    border: "1px solid #fde68a", borderRadius: 6,
+                    padding: "5px 14px", cursor: "pointer"
+                }}
+            >
+                Try again
+            </button>
         </div>
     );
 }
 
-function OfflineAlert({ service, onRetry }) {
+function SectionUnavailable() {
     return (
-        <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 12, padding: "14px 18px", marginBottom: 24, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <WifiOff size={18} color="#ef4444" />
-                <div>
-                    <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#991b1b" }}>{service} service is currently offline</p>
-                    <p style={{ margin: "2px 0 0", fontSize: 12, color: "#f87171" }}>Data will appear here when the service reconnects.</p>
-                </div>
-            </div>
-            {onRetry && (
-                <button onClick={onRetry} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 8, border: "1px solid #fecaca", background: "#fff", color: "#991b1b", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
-                    <RefreshCw size={13} /> Retry
-                </button>
-            )}
+        <div style={{
+            background: "#f8fafc", border: "1px solid #e2e8f0",
+            borderRadius: 10, padding: "14px 18px", marginBottom: 24,
+            display: "flex", alignItems: "center", gap: 10
+        }}>
+            <AlertTriangle size={15} color="#94a3b8" />
+            <p style={{ margin: 0, fontSize: 13, color: "#94a3b8" }}>
+                This section is temporarily unavailable. We're working on it.
+            </p>
         </div>
     );
 }
