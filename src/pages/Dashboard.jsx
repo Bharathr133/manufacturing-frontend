@@ -1032,37 +1032,19 @@ export default function Dashboard() {
                 )}
 
                 {/* ── REPORTS ── */}
-                {isManager && showReports && (
-                    <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, padding: 24, marginTop: 24 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-                            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#0f172a" }}>Manufacturing Reports</h3>
-                            <button onClick={downloadReport} style={{ display: "flex", alignItems: "center", gap: 6, background: "#0f172a", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                                <Download size={15} /> Download JSON
-                            </button>
-                        </div>
-                        <div style={{ marginBottom: 20 }}>
-                            <p style={{ fontSize: 12, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>Report Period</p>
-                            <div style={{ display: "flex", gap: 8 }}>
-                                {["day","week","month","year"].map(p => (
-                                    <button key={p} onClick={() => setReportPeriod(p)} style={{ padding: "6px 16px", borderRadius: 8, border: reportPeriod === p ? "none" : "1px solid #e2e8f0", background: reportPeriod === p ? "#6366f1" : "#fff", color: reportPeriod === p ? "#fff" : "#64748b", fontSize: 13, fontWeight: 600, cursor: "pointer", textTransform: "capitalize" }}>
-                                        {p}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                            <div style={{ border: "1px solid #f1f5f9", borderRadius: 10, padding: 16, background: "#f8fafc" }}>
-                                <p style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 700, color: "#334155" }}>Production Summary</p>
-                                <ReportRow label="Total Orders"     value={services.production === SERVICE_STATUS.OFFLINE ? "Offline" : productionStats.orderCount} offline={services.production === SERVICE_STATUS.OFFLINE} />
-                                <ReportRow label="Running Machines" value={services.machines === SERVICE_STATUS.OFFLINE ? "Offline" : machineStats.runningCount} offline={services.machines === SERVICE_STATUS.OFFLINE} />
-                            </div>
-                            <div style={{ border: "1px solid #f1f5f9", borderRadius: 10, padding: 16, background: "#f8fafc" }}>
-                                <p style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 700, color: "#334155" }}>Quality Summary</p>
-                                <ReportRow label="Total Checks" value={services.quality === SERVICE_STATUS.OFFLINE ? "Offline" : qualityStats.totalChecks} offline={services.quality === SERVICE_STATUS.OFFLINE} />
-                                <ReportRow label="Defect Rate"  value={services.quality === SERVICE_STATUS.OFFLINE ? "Offline" : `${qualityStats.defectRate.toFixed(1)}%`} color={defectColors.text} offline={services.quality === SERVICE_STATUS.OFFLINE} />
-                            </div>
-                        </div>
-                    </div>
+                {isManager && (
+                    <ReportsDrawer
+                        open={showReports}
+                        onClose={() => setShowReports(false)}
+                        services={services}
+                        machineStats={machineStats}
+                        productionStats={productionStats}
+                        qualityStats={qualityStats}
+                        defectColors={defectColors}
+                        reportPeriod={reportPeriod}
+                        setReportPeriod={setReportPeriod}
+                        downloadReport={downloadReport}
+                    />
                 )}
 
                 {/* ── QUICK ACTIONS ── */}
@@ -1232,5 +1214,170 @@ function ReportRow({ label, value, color, offline }) {
             <span style={{ fontSize: 13, color: "#64748b" }}>{label}</span>
             <span style={{ fontSize: 13, fontWeight: 700, color: offline ? "#cbd5e1" : color || "#0f172a" }}>{value}</span>
         </div>
+    );
+}
+
+function ReportsDrawer({ open, onClose, services, machineStats, productionStats, qualityStats, defectColors, reportPeriod, setReportPeriod, downloadReport }) {
+    return (
+        <>
+            {/* Backdrop */}
+            <div
+                onClick={onClose}
+                style={{
+                    position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)",
+                    zIndex: 1000, opacity: open ? 1 : 0,
+                    pointerEvents: open ? "all" : "none",
+                    transition: "opacity 0.3s ease"
+                }}
+            />
+
+            {/* Drawer */}
+            <div style={{
+                position: "fixed", top: 0, right: 0, height: "100vh",
+                width: 420, background: "#fff", zIndex: 1001,
+                boxShadow: "-4px 0 32px rgba(0,0,0,0.12)",
+                transform: open ? "translateX(0)" : "translateX(100%)",
+                transition: "transform 0.35s cubic-bezier(0.4,0,0.2,1)",
+                display: "flex", flexDirection: "column",
+                fontFamily: "'DM Sans', 'Inter', system-ui, sans-serif"
+            }}>
+
+                {/* Drawer Header */}
+                <div style={{
+                    padding: "20px 24px", borderBottom: "1px solid #f1f5f9",
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    flexShrink: 0
+                }}>
+                    <div>
+                        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#0f172a" }}>
+                            Manufacturing Reports
+                        </h3>
+                        <p style={{ margin: "2px 0 0", fontSize: 12, color: "#94a3b8" }}>
+                            Summary across all services
+                        </p>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        style={{
+                            background: "#f1f5f9", border: "none", borderRadius: 8,
+                            width: 32, height: 32, display: "flex", alignItems: "center",
+                            justifyContent: "center", cursor: "pointer", color: "#64748b"
+                        }}
+                    >
+                        <XCircle size={18} />
+                    </button>
+                </div>
+
+                {/* Drawer Body — scrollable */}
+                <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
+
+                    {/* Report Period */}
+                    <p style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8, marginTop: 0 }}>
+                        Report Period
+                    </p>
+                    <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
+                        {["day", "week", "month", "year"].map(p => (
+                            <button
+                                key={p}
+                                onClick={() => setReportPeriod(p)}
+                                style={{
+                                    padding: "6px 14px", borderRadius: 8, fontSize: 13,
+                                    fontWeight: 600, cursor: "pointer", textTransform: "capitalize",
+                                    border: reportPeriod === p ? "none" : "1px solid #e2e8f0",
+                                    background: reportPeriod === p ? "#6366f1" : "#fff",
+                                    color: reportPeriod === p ? "#fff" : "#64748b"
+                                }}
+                            >
+                                {p}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Production Summary */}
+                    <div style={{ background: "#f8fafc", border: "1px solid #f1f5f9", borderRadius: 12, padding: 16, marginBottom: 16 }}>
+                        <p style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 700, color: "#334155" }}>
+                            Production Summary
+                        </p>
+                        <ReportRow
+                            label="Total Orders"
+                            value={services.production === SERVICE_STATUS.OFFLINE ? "Unavailable" : productionStats.orderCount}
+                            offline={services.production === SERVICE_STATUS.OFFLINE}
+                        />
+                        <ReportRow
+                            label="Total Machines"
+                            value={services.machines === SERVICE_STATUS.OFFLINE ? "Unavailable" : machineStats.machineCount}
+                            offline={services.machines === SERVICE_STATUS.OFFLINE}
+                        />
+                        <ReportRow
+                            label="Running Machines"
+                            value={services.machines === SERVICE_STATUS.OFFLINE ? "Unavailable" : machineStats.runningCount}
+                            offline={services.machines === SERVICE_STATUS.OFFLINE}
+                        />
+                    </div>
+
+                    {/* Quality Summary */}
+                    <div style={{ background: "#f8fafc", border: "1px solid #f1f5f9", borderRadius: 12, padding: 16, marginBottom: 16 }}>
+                        <p style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 700, color: "#334155" }}>
+                            Quality Summary
+                        </p>
+                        <ReportRow
+                            label="Total Checks"
+                            value={services.quality === SERVICE_STATUS.OFFLINE ? "Unavailable" : qualityStats.totalChecks}
+                            offline={services.quality === SERVICE_STATUS.OFFLINE}
+                        />
+                        <ReportRow
+                            label="Passed"
+                            value={services.quality === SERVICE_STATUS.OFFLINE ? "Unavailable" : qualityStats.passedChecks}
+                            offline={services.quality === SERVICE_STATUS.OFFLINE}
+                        />
+                        <ReportRow
+                            label="Rework"
+                            value={services.quality === SERVICE_STATUS.OFFLINE ? "Unavailable" : qualityStats.reworkChecks}
+                            offline={services.quality === SERVICE_STATUS.OFFLINE}
+                        />
+                        <ReportRow
+                            label="Failed"
+                            value={services.quality === SERVICE_STATUS.OFFLINE ? "Unavailable" : qualityStats.failedChecks}
+                            offline={services.quality === SERVICE_STATUS.OFFLINE}
+                        />
+                        <ReportRow
+                            label="Defect Rate"
+                            value={services.quality === SERVICE_STATUS.OFFLINE ? "Unavailable" : `${qualityStats.defectRate.toFixed(1)}%`}
+                            color={defectColors.text}
+                            offline={services.quality === SERVICE_STATUS.OFFLINE}
+                        />
+                    </div>
+
+                    {/* Quality bar inside drawer */}
+                    {services.quality === SERVICE_STATUS.ONLINE && qualityStats.totalChecks > 0 && (
+                        <QualityBar
+                            passed={qualityStats.passedChecks}
+                            rework={qualityStats.reworkChecks}
+                            failed={qualityStats.failedChecks}
+                            total={qualityStats.totalChecks}
+                        />
+                    )}
+                </div>
+
+                {/* Drawer Footer */}
+                <div style={{
+                    padding: "16px 24px", borderTop: "1px solid #f1f5f9",
+                    flexShrink: 0
+                }}>
+                    <button
+                        onClick={downloadReport}
+                        style={{
+                            width: "100%", display: "flex", alignItems: "center",
+                            justifyContent: "center", gap: 8, background: "#0f172a",
+                            color: "#fff", border: "none", borderRadius: 10,
+                            padding: "12px 16px", fontSize: 14, fontWeight: 600,
+                            cursor: "pointer"
+                        }}
+                    >
+                        <Download size={16} /> Download JSON Report
+                    </button>
+                </div>
+            </div>
+        </>
     );
 }
