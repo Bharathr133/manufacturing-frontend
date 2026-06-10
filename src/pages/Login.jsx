@@ -110,7 +110,7 @@ export default function Login() {
                             onClick={handleAutofill}
                             className="w-full mt-2 py-2 text-xs font-semibold text-blue-600 hover:bg-blue-50 rounded-xl transition"
                         >
-                            Initialize {selectedRole} Credentials
+                            Autofill with {selectedRole} Credentials
                         </button>
                     </form>
                 </div>
