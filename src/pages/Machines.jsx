@@ -278,7 +278,8 @@ export default function Machines() {
                                     placeholder="Enter machine name"
                                     value={formData.machineName}
                                     onChange={(e) => setFormData({ ...formData, machineName: e.target.value })}
-                                    className="w-full border p-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                    className={`w-full border p-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none ${editingId ? "bg-gray-50 cursor-not-allowed text-gray-500" : ""}`}
+                                    disabled={!!editingId}
                                 />
                             </div>
 
