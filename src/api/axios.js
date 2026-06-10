@@ -41,5 +41,19 @@ api.interceptors.response.use(
         return Promise.reject(userFriendlyError);
     }
 );
+const warmupServices = async () => {
+    const services = [
+        // Render (these sleep aggressively on free tier)
+        "https://production-service-i7vs.onrender.com/production/count",
+        "https://manufacturing-system-fse7.onrender.com/quality/stats",
+    ];
+
+    // Ping all at the same time, don't wait for any
+    services.forEach((url) => {
+        fetch(url, { signal: AbortSignal.timeout(10000) }).catch(() => { });
+    });
+};
+
+warmupServices();
 
 export default api;

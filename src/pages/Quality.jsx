@@ -215,7 +215,6 @@ export default function Quality() {
             setSubmitting(false);
             return;
         }
-
         const totalInspected = passed + failed + rework;
         if (totalInspected !== produced) {
             alert(`Validation Error: Passed (${passed}) + Rejected (${failed}) + Rework (${rework}) must equal Produced (${produced}). Current sum: ${totalInspected}`);
@@ -235,8 +234,9 @@ export default function Quality() {
                 partNumber: formData.partNumber,
                 quantityProduced: produced,
                 quantityPassed: passed,
-                quantityFailed: failed, // Ensure failed is sent
-                quantityRework: rework, // Ensure rework is sent
+                quantityFailed: failed,
+                quantityRework: rework,
+                rework: rework, // Added common backend key
                 defectType: formData.defectType || "NONE",
                 severity: formData.severity,
                 inspector: formData.inspector,
@@ -399,7 +399,7 @@ export default function Quality() {
                     </div>
                     <div className="bg-white rounded-lg shadow p-5">
                         <p className="text-sm text-gray-500">Rework Needed</p>
-                        <p className="text-2xl font-bold text-yellow-600">{stats.rework}</p>
+                        <p className="text-2xl font-bold text-yellow-600">{stats.rework ?? stats.reworkChecks ?? 0}</p>
                     </div>
                     <div className="bg-white rounded-lg shadow p-5">
                         <p className="text-sm text-gray-500">Failed</p>
@@ -484,6 +484,7 @@ export default function Quality() {
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Part Number</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Produced</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Passed</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rework</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Failed</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Severity</th>
@@ -494,11 +495,11 @@ export default function Quality() {
                         <tbody className="divide-y divide-gray-200">
                             {loading ? (
                                 <tr>
-                                    <td colSpan="11" className="text-center py-10">Loading...</td>
+                                    <td colSpan="12" className="text-center py-10">Loading...</td>
                                 </tr>
                             ) : qualityChecks.length === 0 ? (
                                 <tr>
-                                    <td colSpan="11" className="text-center py-10 text-gray-500">No quality checks recorded</td>
+                                    <td colSpan="12" className="text-center py-10 text-gray-500">No quality checks recorded</td>
                                 </tr>
                             ) : (
                                 qualityChecks.map((check) => (
@@ -509,7 +510,14 @@ export default function Quality() {
                                         <td className="px-6 py-4 font-medium">{check.partNumber}</td>
                                         <td className="px-6 py-4 text-sm">{check.quantityProduced || 0}</td>
                                         <td className="px-6 py-4 text-sm text-green-600">{check.quantityPassed}</td>
-                                        <td className="px-6 py-4 text-sm text-red-600">{check.quantityFailed}</td>
+                                        {/* Rework Column */}
+                                        <td className="px-6 py-4 text-sm text-yellow-600 font-bold">
+                                            {check.quantityRework ?? check.rework ?? check.reworkQuantity ?? 0}
+                                        </td>
+                                        {/* Failed Column */}
+                                        <td className="px-6 py-4 text-sm text-red-600 font-bold">
+                                            {check.quantityFailed ?? check.failed ?? check.failedQuantity ?? 0}
+                                        </td>
                                         <td className="px-6 py-4">
                                             <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusBadge(check.status)}`}>
                                                 {check.status}
@@ -553,8 +561,8 @@ export default function Quality() {
                                         className="w-full border p-2 rounded-lg bg-gray-50"
                                     >
                                         <option value="">Select Order</option>
-                                        {orders
-                                            .filter(o => o.status === 'COMPLETED' && !qualityChecks.some(qc => qc.productionOrderId === o.id))
+                                        {orders // Allow recording multiple quality checks for the same completed order
+                                            .filter(o => o.status === 'COMPLETED')
                                             .map(order => ( // Only allow completed orders that haven't been checked yet
                                             <option key={order.id} value={order.id}>
                                                 Order #{order.id} - {order.partNumber} ({order.status})
@@ -697,7 +705,12 @@ export default function Quality() {
                             <div><span className="font-medium">Part Number:</span> {selectedCheck.partNumber}</div>
                             <div><span className="font-medium">Quantity Produced:</span> {selectedCheck.quantityProduced}</div>
                             <div><span className="font-medium">Quantity Passed:</span> {selectedCheck.quantityPassed}</div>
-                            <div><span className="font-medium">Quantity Failed:</span> {selectedCheck.quantityFailed}</div>
+                            <div>
+                                <span className="font-medium">Quantity Rework:</span> {selectedCheck.quantityRework ?? selectedCheck.rework ?? 0}
+                            </div>
+                            <div>
+                                <span className="font-medium">Quantity Failed:</span> {selectedCheck.quantityFailed ?? selectedCheck.failed ?? 0}
+                            </div>
                             <div><span className="font-medium">Defect Rate:</span> {(selectedCheck.quantityFailed / selectedCheck.quantityProduced * 100).toFixed(1)}%</div>
                             <div><span className="font-medium">Status:</span> <span className={`px-2 py-1 rounded-full text-xs ${getStatusBadge(selectedCheck.status)}`}>{selectedCheck.status}</span></div>
                             <div><span className="font-medium">Severity:</span> <span className={`px-2 py-1 rounded-full text-xs ${getSeverityBadge(selectedCheck.severity)}`}>{selectedCheck.severity || "N/A"}</span></div>

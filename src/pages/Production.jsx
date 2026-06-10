@@ -117,7 +117,8 @@ export default function Production() {
 
                         if (stats && (currentStatus === 'RUNNING' || currentStatus === 'ACTIVE')) {
                             // Prioritize stats.cycleTime, then order.cycleTime, then machine default
-                            const cTime = Number(stats.cycleTime || order.cycleTime || MACHINE_CYCLE_TIMES[machine?.machineType] || 30) || 30;
+                            const cTime = Number(stats?.cycleTime ?? order.cycleTime ?? MACHINE_CYCLE_TIMES[machine?.machineType] ?? 30) || 30;
+
                             const addedRuntime = secondsPassed;
                             const newRuntime = (stats.runtime || 0) + addedRuntime;
                             const newUnits = Math.floor(newRuntime / cTime);
@@ -153,7 +154,8 @@ export default function Production() {
                     if (currentStatus !== 'RUNNING' && currentStatus !== 'ACTIVE') return;
 
                     // Prioritize stats.cycleTime, then order.cycleTime, then machine default
-                    const cycleTime = Number(stats?.cycleTime || order.cycleTime || MACHINE_CYCLE_TIMES[machine?.machineType] || 30) || 30;
+                    const cycleTime = Number(stats?.cycleTime ?? order.cycleTime ?? MACHINE_CYCLE_TIMES[machine?.machineType] ?? 30) || 30;
+
 
                     // Initialize or use existing stats - CRITICAL: Preserve all properties (operator, batch, etc.)
                     const current = next[order.id] || { 
@@ -637,8 +639,8 @@ export default function Production() {
                         {activeOrders.map((order) => {
                             const stats = simProgress[order.id] || { units: 0, runtime: 0, value: 0, operator: order.operator || 'SYSTEM', batchNumber: order.batchNumber || 'BT-SYNC-01', cycleTime: order.cycleTime || 30 };
                             const machine = machines.find(m => m.id === order.machineId);
-                            const cycleTime =
-                                Number(stats?.cycleTime || order.cycleTime || MACHINE_CYCLE_TIMES[machine?.machineType] || 30) || 30;
+                            const displayCycleTime =
+                                Number(stats?.cycleTime ?? order.cycleTime ?? MACHINE_CYCLE_TIMES[machine?.machineType] ?? 30) || 30;
                             const remainingUnits = Math.max(0, order.quantity - stats.units);
                             const remainingTimeSec = remainingUnits * cycleTime;
                             const estFinish = new Date(Date.now() + (remainingTimeSec * 1000)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
