@@ -277,7 +277,7 @@ export default function Machines() {
                                     type="text"
                                     placeholder="Enter machine name"
                                     value={formData.machineName}
-                                    onChange={(e) => setFormData({ ...formData, machineName: e.target.value })}
+                                    onChange={(e) => !editingId && setFormData({ ...formData, machineName: e.target.value })}
                                     className={`w-full border p-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none ${editingId ? "bg-gray-50 cursor-not-allowed text-gray-500" : ""}`}
                                     disabled={!!editingId}
                                 />
@@ -287,8 +287,9 @@ export default function Machines() {
                                 <label className="block text-sm font-medium mb-1">Machine Type *</label>
                                 <select
                                     value={formData.machineType}
-                                    onChange={(e) => setFormData({ ...formData, machineType: e.target.value })}
-                                    className="w-full border p-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                    onChange={(e) => !editingId && setFormData({ ...formData, machineType: e.target.value })}
+                                    className={`w-full border p-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none ${editingId ? "bg-gray-50 cursor-not-allowed text-gray-500" : ""}`}
+                                    disabled={!!editingId}
                                 >
                                     <option value="">Select Machine Type</option>
                                     {machineTypes.map(type => (
